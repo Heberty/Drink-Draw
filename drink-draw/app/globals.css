@@ -490,7 +490,7 @@ summary.offer-details-control::-webkit-details-marker { display: none; }
 .offer-selection-label span { font-size: .74rem; font-weight: 730; color: var(--accent-ink); }
 .admin-import { display: grid; justify-items: start; gap: 7px; margin-bottom: 18px; }
 
-.offer-toolbar, .offer-header-actions { display: flex; align-items: center; gap: 8px; }
+.offer-toolbar, .offer-toolbar-start, .offer-header-actions { display: flex; align-items: center; gap: 8px; }
 .offer-toolbar { flex-wrap: wrap; justify-content: flex-end; }
 .offer-count { color: var(--muted-foreground); font-size: .8rem; white-space: nowrap; }
 .offer-header-actions { justify-content: flex-end; }

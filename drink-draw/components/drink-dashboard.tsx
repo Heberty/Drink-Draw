@@ -1,13 +1,55 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Eraser, Minus, Plus, Scale, Star } from "lucide-react";
+import { Eraser, Info, Minus, Plus, Scale, Star } from "lucide-react";
 import { useCatalog } from "@/components/catalog-provider";
 import { OfferCard } from "@/components/offer-card";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { compareOffers, formatPrice, formatSavings, offerTotals, ratePerLiter } from "@/lib/compare";
 import { relatedDrinks } from "@/lib/related-drinks";
 import { drinksAtEstablishment, emptyOffer, initialSession, offerLetters, readSession, selectOfferDrink, selectOfferEstablishment, sessionKey, type Offer } from "@/lib/drink-session";
+
+const comparisonHelpKey = "drink-draw:comparison-help-seen";
+let helpSeenWithoutStorage = false;
+
+function ComparisonHelp() {
+  const [open, setOpen] = useState(false);
+  const label = "Entenda como funciona o comparativo";
+
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(comparisonHelpKey) !== null) return;
+      window.localStorage.setItem(comparisonHelpKey, "1");
+    } catch {
+      if (helpSeenWithoutStorage) return;
+      helpSeenWithoutStorage = true;
+    }
+    setOpen(true);
+  }, []);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" variant="outline" size="icon" aria-label={label} title={label}>
+          <Info aria-hidden="true" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogTitle className="pr-8 text-xl font-bold">Como funciona o comparativo</DialogTitle>
+        <DialogDescription asChild>
+          <div className="mt-3 space-y-3 text-sm leading-relaxed text-muted-foreground">
+            <p>Escolha o estabelecimento e a bebida em cada card. Informe a quantidade, o volume em mL por unidade e o preço de uma unidade.</p>
+            <p>O comparador calcula o preço total e destaca a oferta com o menor preço por litro. Use o botão + para comparar até quatro ofertas.</p>
+          </div>
+        </DialogDescription>
+        <div className="modal-actions">
+          <Button type="button" onClick={() => setOpen(false)}>Entendi</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export function DrinkDashboard() {
   const [session, setSession] = useState(initialSession);
@@ -140,14 +182,17 @@ export function DrinkDashboard() {
         <div className="offers-heading">
           <h2>Suas ofertas</h2>
           <div className="offer-toolbar">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => { setSuggestedId(undefined); setSession(([first, second, ...rest]) => [second, first, ...rest]); }}
-              disabled={!ready}
-            >
-              {session.length > 2 ? "Inverter A e B" : "Inverter ofertas"}
-            </Button>
+            <div className="offer-toolbar-start">
+              <ComparisonHelp />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => { setSuggestedId(undefined); setSession(([first, second, ...rest]) => [second, first, ...rest]); }}
+                disabled={!ready}
+              >
+                {session.length > 2 ? "Inverter A e B" : "Inverter ofertas"}
+              </Button>
+            </div>
             <Button type="button" variant="outline" disabled={!ready} onClick={clearAllOffers}>
               <Eraser aria-hidden="true" /> Limpar todas
             </Button>
