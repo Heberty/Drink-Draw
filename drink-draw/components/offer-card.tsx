@@ -133,17 +133,19 @@ export function OfferCard({ letter, offer, drinks, establishments, winner, disab
         <fieldset className="offer-fields" disabled={disabled} aria-label={`Dados da oferta ${letter}`}>
           <div className="field">
             <label htmlFor={`${prefix}-establishment`}>Estabelecimento</label>
-            <NativeSelect
-              id={`${prefix}-establishment`}
-              value={establishment?.id ?? ""}
-              onChange={(event) => onSelectEstablishment(event.target.value)}
-            >
-              <option value="">Todos os estabelecimentos</option>
-              {establishments.map((record) => (
-                <option key={record.id} value={record.id}>{establishmentLabel(record)} · {record.type}</option>
-              ))}
-            </NativeSelect>
-            {establishment?.image && <CatalogImage image={establishment.image} alt={`Imagem de ${establishment.name}`} className="offer-establishment-image" />}
+            <div className="offer-establishment-row">
+              <NativeSelect
+                id={`${prefix}-establishment`}
+                value={establishment?.id ?? ""}
+                onChange={(event) => onSelectEstablishment(event.target.value)}
+              >
+                <option value="">Todos os estabelecimentos</option>
+                {establishments.map((record) => (
+                  <option key={record.id} value={record.id}>{establishmentLabel(record)} · {record.type}</option>
+                ))}
+              </NativeSelect>
+              {establishment?.image && <CatalogImage image={establishment.image} alt={`Imagem de ${establishment.name}`} className="offer-establishment-image" />}
+            </div>
           </div>
           <div className="field offer-select-field">
             <div className="offer-selection-label">

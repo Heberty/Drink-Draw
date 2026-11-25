@@ -3,30 +3,39 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowLeft, BookOpen, CupSoda, Droplet, GlassWater, Package, Tag } from "lucide-react";
+import { ArrowLeft, BookOpen, Building2, CupSoda, Droplet, GlassWater, Package, Tag } from "lucide-react";
 import { CatalogImage } from "@/components/catalog-image";
 import { useCatalog } from "@/components/catalog-provider";
 import { PackagePlaceholder } from "@/components/package-placeholder";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatVolume, parseVolume } from "@/lib/compare";
-import { detailDraft, offerLetters, readSession } from "@/lib/drink-session";
+import { detailDraft, offerLetters, readSession, type Offer } from "@/lib/drink-session";
 import { toDraft, type Drink } from "@/lib/drinks";
+import { establishmentLabel, type Establishment } from "@/lib/establishments";
 
-export function DrinkDetail({ drink, related, offerIndex }: { drink: Drink; related: Drink[]; offerIndex?: number }) {
-  const { drinks, ready } = useCatalog();
-  const [draft, setDraft] = useState(() => toDraft(drink));
+export function DrinkDetail({ drink, related, offerIndex, referenceEstablishment }: {
+  drink: Drink;
+  related: Drink[];
+  offerIndex?: number;
+  referenceEstablishment?: Establishment;
+}) {
+  const { drinks, establishments, ready } = useCatalog();
+  const [offer, setOffer] = useState<Offer>();
 
   useEffect(() => {
     if (offerIndex === undefined || !ready) return;
     try {
-      const offer = readSession(window.sessionStorage, drinks)[offerIndex];
-      setDraft(offer?.drinkId === drink.id ? detailDraft(drink, offer) : toDraft(drink));
+      const savedOffer = readSession(window.sessionStorage, drinks)[offerIndex];
+      setOffer(savedOffer?.drinkId === drink.id ? savedOffer : undefined);
     } catch {
-      setDraft(toDraft(drink));
+      setOffer(undefined);
     }
-  }, [drink, drinks, offerIndex, ready]);
+  }, [drink.id, drinks, offerIndex, ready]);
 
+  const draft = offer ? detailDraft(drink, offer) : toDraft(drink);
+  const offerEstablishment = establishments.find(({ id }) => id === offer?.establishmentId);
+  const establishment = offerEstablishment ?? referenceEstablishment;
   const volume = parseVolume(draft.volume);
   const volumeLabel = volume === null ? "—" : formatVolume(volume);
   const showPhoto = drink.id === "sicilia" && draft.brand === drink.brand &&
@@ -75,6 +84,15 @@ export function DrinkDetail({ drink, related, offerIndex }: { drink: Drink; rela
                   <div><dt><GlassWater aria-hidden="true" /> Tipo</dt><dd>{draft.type}</dd></div>
                   <div><dt><Droplet aria-hidden="true" /> Volume</dt><dd>{volumeLabel}</dd></div>
                   <div><dt><Package aria-hidden="true" /> Embalagem</dt><dd>{draft.packaging}</dd></div>
+                  {establishment && (
+                    <div className="detail-establishment">
+                      <dt><Building2 aria-hidden="true" /> Estabelecimento</dt>
+                      <dd>
+                        {establishment.image && <CatalogImage image={establishment.image} className="detail-establishment-image" />}
+                        <span>{establishmentLabel(establishment)}</span>
+                      </dd>
+                    </div>
+                  )}
                 </dl>
               </div>
             </Card>

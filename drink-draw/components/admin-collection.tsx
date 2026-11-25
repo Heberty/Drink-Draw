@@ -101,8 +101,16 @@ export function AdminCollection<T extends Entry>({
                 <span className="admin-record-media">{record.image ? <CatalogImage image={record.image} /> : icon}</span>
                 <div className="admin-record-copy"><strong>{record.name}</strong><span>{summary(record)}</span></div>
                 <div className="admin-record-actions">
-                  <Button type="button" variant="outline" onClick={() => openEditor(record)} aria-label={`Editar ${record.name}`} disabled={!canWrite}><Pencil aria-hidden="true" /> <span>Editar</span></Button>
-                  {(!canRemove || canRemove(record)) && <Button type="button" variant="ghost" size="icon" onClick={() => openDelete(record)} aria-label={`Excluir ${record.name}`} disabled={!canWrite}><Trash2 aria-hidden="true" /></Button>}
+                  <Button type="button" variant="outline" className="admin-record-edit" onClick={() => openEditor(record)}
+                    aria-label={`Editar ${record.name}`} disabled={!canWrite}>
+                    <Pencil aria-hidden="true" /> <span>Editar</span>
+                  </Button>
+                  {(!canRemove || canRemove(record)) && (
+                    <Button type="button" variant="ghost" size="icon" className="admin-record-delete" onClick={() => openDelete(record)}
+                      aria-label={`Excluir ${record.name}`} disabled={!canWrite}>
+                      <Trash2 aria-hidden="true" />
+                    </Button>
+                  )}
                 </div>
               </li>
             ))}

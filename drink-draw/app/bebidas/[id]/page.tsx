@@ -22,11 +22,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function DrinkPage({ params, searchParams }: Props) {
   const [{ id }, { oferta }] = await Promise.all([params, searchParams]);
-  const { drinks } = loadCatalog();
+  const { drinks, establishments } = loadCatalog();
   const drink = drinks.find((item) => item.id === id);
   if (!drink) notFound();
 
   const index = offerLetters.findIndex((letter) => letter === oferta);
   const offerIndex = index >= 0 ? index : undefined;
-  return <DrinkDetail key={`${id}-${offerIndex}`} drink={drink} related={relatedDrinks(drink, drinks).slice(0, 6)} offerIndex={offerIndex} />;
+  const referenceEstablishment = establishments.find(({ id }) => id === drink.referenceEstablishmentId);
+  return <DrinkDetail key={`${id}-${offerIndex}`} drink={drink} related={relatedDrinks(drink, drinks).slice(0, 6)}
+    offerIndex={offerIndex} referenceEstablishment={referenceEstablishment} />;
 }
