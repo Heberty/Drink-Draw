@@ -8,7 +8,14 @@ export type DrinkData = {
   packaging: (typeof packages)[number];
 };
 
-export type Drink = DrinkData & { id: string; name: string; palette: string; referencePriceCents?: number; image?: Blob | string };
+export type Drink = DrinkData & {
+  id: string;
+  name: string;
+  palette: string;
+  referencePriceCents?: number;
+  referenceEstablishmentId?: string;
+  image?: Blob | string;
+};
 
 export const catalog: [Drink, ...Drink[]] = [
   {

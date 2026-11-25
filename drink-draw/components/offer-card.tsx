@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { ChevronDown, Info, Pencil, RotateCcw, Star, X } from "lucide-react";
+import { ChevronDown, Eraser, Info, Pencil, RotateCcw, Star, X } from "lucide-react";
 import { CatalogImage } from "@/components/catalog-image";
 import { DrinkFields } from "@/components/drink-fields";
 import { PackagePlaceholder } from "@/components/package-placeholder";
@@ -13,7 +13,7 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { formatPrice, formatVolume, offerTotals, ratePerLiter } from "@/lib/compare";
-import { offerDrink, resetOffer, withDrinkCorrection, type Offer, type offerLetters } from "@/lib/drink-session";
+import { drinksAtEstablishment, offerDrink, resetOffer, withDrinkCorrection, type Offer, type offerLetters } from "@/lib/drink-session";
 import { parseDraft, toDraft, type Drink, type DrinkData, type DrinkDraft } from "@/lib/drinks";
 import { establishmentLabel, type Establishment } from "@/lib/establishments";
 
@@ -81,12 +81,14 @@ type Props = {
   winner: boolean;
   disabled: boolean;
   suggested?: boolean;
+  onSelectEstablishment: (id: string) => void;
   onSelectDrink: (id: string) => void;
   onChange: (offer: Offer) => void;
+  onClear: () => void;
   onRemove?: () => void;
 };
 
-export function OfferCard({ letter, offer, drinks, establishments, winner, disabled, suggested, onSelectDrink, onChange, onRemove }: Props) {
+export function OfferCard({ letter, offer, drinks, establishments, winner, disabled, suggested, onSelectEstablishment, onSelectDrink, onChange, onClear, onRemove }: Props) {
   const prefix = `offer-${letter}`;
   const drink = offerDrink(offer, drinks);
   const original = drinks.find(({ id }) => id === offer.drinkId);
@@ -97,7 +99,9 @@ export function OfferCard({ letter, offer, drinks, establishments, winner, disab
   const invalidQuantity = offer.quantity !== "" && quantity === null;
   const invalidTotalVolume = volume !== null && quantity !== null && totalVolume === null;
   const establishment = establishments.find(({ id }) => id === offer.establishmentId);
-  const moreLabel = <><Info aria-hidden="true" /> Saiba mais</>;
+  const availableDrinks = drinksAtEstablishment(drinks, establishment?.id ?? "");
+  const referenceEstablishment = establishments.find(({ id }) => id === drink?.referenceEstablishmentId);
+  const moreLabel = <><Info aria-hidden="true" /><span>Saiba mais</span></>;
   const detailsLabel = <><ChevronDown aria-hidden="true" /> Ficha da bebida</>;
 
   return (
@@ -106,7 +110,12 @@ export function OfferCard({ letter, offer, drinks, establishments, winner, disab
         <div className="offer-header">
           <h2 id={`${prefix}-title`}><span className="offer-letter" aria-hidden="true">{letter}</span> Oferta {letter}</h2>
           <div className="offer-header-actions">
-            {winner && <span className="winner-badge"><Star aria-hidden="true" className="winner-star" /> Melhor custo-benefício</span>}
+            {winner && (
+              <span className="winner-badge">
+                <Star aria-hidden="true" className="winner-star" />
+                <span className="winner-badge-text">Melhor custo-benefício</span>
+              </span>
+            )}
             {onRemove && <Button type="button" variant="ghost" size="icon" className="offer-remove" disabled={disabled}
               aria-label={`Remover oferta ${letter}`} title={`Remover oferta ${letter}`} onClick={onRemove}><X aria-hidden="true" /></Button>}
           </div>
@@ -122,15 +131,30 @@ export function OfferCard({ letter, offer, drinks, establishments, winner, disab
         </div> : <div className="offer-empty-visual">Selecione uma bebida para comparar.</div>}
 
         <fieldset className="offer-fields" disabled={disabled} aria-label={`Dados da oferta ${letter}`}>
+          <div className="field">
+            <label htmlFor={`${prefix}-establishment`}>Estabelecimento</label>
+            <NativeSelect
+              id={`${prefix}-establishment`}
+              value={establishment?.id ?? ""}
+              onChange={(event) => onSelectEstablishment(event.target.value)}
+            >
+              <option value="">Todos os estabelecimentos</option>
+              {establishments.map((record) => (
+                <option key={record.id} value={record.id}>{establishmentLabel(record)} · {record.type}</option>
+              ))}
+            </NativeSelect>
+            {establishment?.image && <CatalogImage image={establishment.image} alt={`Imagem de ${establishment.name}`} className="offer-establishment-image" />}
+          </div>
           <div className="field offer-select-field">
             <div className="offer-selection-label">
               <label htmlFor={`${prefix}-drink`}>Bebida do catálogo</label>
               {suggested && <span>Sugestão automática</span>}
             </div>
             <div className="drink-select">
-              <NativeSelect id={`${prefix}-drink`} value={offer.drinkId} onChange={(event) => onSelectDrink(event.target.value)}>
-                <option value="">Selecione uma bebida</option>
-                {drinks.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.volume} mL</option>)}
+              <NativeSelect id={`${prefix}-drink`} value={offer.drinkId} disabled={!availableDrinks.length}
+                onChange={(event) => onSelectDrink(event.target.value)}>
+                <option value="">{availableDrinks.length ? "Selecione uma bebida" : "Nenhuma bebida cadastrada"}</option>
+                {availableDrinks.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.volume} mL</option>)}
               </NativeSelect>
               {drink && original && <div className="drink-select-editor">
                 <DrinkEditor offer={offer} drink={drink} original={original} onChange={onChange} />
@@ -150,10 +174,11 @@ export function OfferCard({ letter, offer, drinks, establishments, winner, disab
               {invalidPrice && <span id={`${prefix}-price-error`} className="form-feedback">Use um valor como 4,49.</span>}
               {drink?.referencePriceCents !== undefined && <small className="reference-price">
                 Referência por unidade {formatPrice(drink.referencePriceCents / 100)}
+                {referenceEstablishment && ` · ${establishmentLabel(referenceEstablishment)}`}
               </small>}
             </div>
             <div className="field">
-              <label htmlFor={`${prefix}-volume`}>Volume por unidade (mL)</label>
+              <label htmlFor={`${prefix}-volume`}>Vl por unidade (mL)</label>
               <Input
                 id={`${prefix}-volume`}
                 inputMode="numeric"
@@ -181,20 +206,6 @@ export function OfferCard({ letter, offer, drinks, establishments, winner, disab
               </span>}
             </div>
           </fieldset>
-          <div className="field">
-            <label htmlFor={`${prefix}-establishment`}>Estabelecimento</label>
-            <NativeSelect
-              id={`${prefix}-establishment`}
-              value={establishment?.id ?? ""}
-              onChange={(event) => onChange({ ...offer, establishmentId: event.target.value })}
-            >
-              <option value="">Selecione um estabelecimento</option>
-              {establishments.map((record) => (
-                <option key={record.id} value={record.id}>{establishmentLabel(record)} · {record.type}</option>
-              ))}
-            </NativeSelect>
-            {establishment?.image && <CatalogImage image={establishment.image} alt={`Imagem de ${establishment.name}`} className="offer-establishment-image" />}
-          </div>
         </fieldset>
 
         <div className="offer-card-footer">
@@ -209,15 +220,20 @@ export function OfferCard({ letter, offer, drinks, establishments, winner, disab
           <div className="offer-footer-actions">
             <Button type="button" variant="outline" disabled={disabled || !original}
               aria-label={`Restaurar valores da oferta ${letter}`}
+              title="Restaurar valores"
               onClick={() => { if (original) onChange(resetOffer(offer, original)); }}>
-              <RotateCcw aria-hidden="true" /> Restaurar valores
+              <RotateCcw aria-hidden="true" /><span>Restaurar valores</span>
+            </Button>
+            <Button type="button" variant="outline" disabled={disabled}
+              aria-label={`Limpar oferta ${letter}`} title="Limpar oferta" onClick={onClear}>
+              <Eraser aria-hidden="true" /><span>Limpar oferta</span>
             </Button>
             {drink ? <Button asChild variant="outline">
               <Link href={{ pathname: `/bebidas/${drink.id}`, query: { oferta: letter } }}
-                aria-label={`Saiba mais sobre ${drink.name}, oferta ${letter}`}>
+                aria-label={`Saiba mais sobre ${drink.name}, oferta ${letter}`} title="Saiba mais">
                 {moreLabel}
               </Link>
-            </Button> : <Button type="button" variant="outline" disabled>{moreLabel}</Button>}
+            </Button> : <Button type="button" variant="outline" disabled aria-label="Saiba mais">{moreLabel}</Button>}
           </div>
           <div className="offer-details">
             {drink ? <details>

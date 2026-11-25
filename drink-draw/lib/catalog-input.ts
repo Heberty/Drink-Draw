@@ -1,5 +1,5 @@
 import { CatalogValidationError, type CatalogData } from "@/lib/catalog";
-import { isDrinkData } from "@/lib/drinks";
+import { isDrinkData, type Drink } from "@/lib/drinks";
 import { blankEstablishment, establishmentTypes, normalizeEstablishment, states, type EstablishmentDraft } from "@/lib/establishments";
 
 export function validRecordId(id: unknown): id is string {
@@ -23,11 +23,14 @@ export function readCatalogRecord(collection: keyof CatalogData, json: FormDataE
     }
     const { brand, description, type, volume, packaging } = value;
     const palette = ["lemon", "amber", "mint", "peach"].find((color) => color === (value as { palette?: string }).palette) ?? "lemon";
-    const { referencePriceCents } = value as { referencePriceCents?: number };
+    const { referencePriceCents, referenceEstablishmentId } = value as Drink;
     if (referencePriceCents !== undefined && (!Number.isSafeInteger(referencePriceCents) || referencePriceCents < 0)) {
       throw new CatalogValidationError("Informe um preço de referência válido.");
     }
-    return { id, name, brand: brand.trim(), description: description.trim(), type: type.trim(), volume, packaging, palette, referencePriceCents };
+    if (referenceEstablishmentId !== undefined && (!validRecordId(referenceEstablishmentId) || referencePriceCents === undefined)) {
+      throw new CatalogValidationError("Informe o preço e selecione um estabelecimento válido.");
+    }
+    return { id, name, brand: brand.trim(), description: description.trim(), type: type.trim(), volume, packaging, palette, referencePriceCents, referenceEstablishmentId };
   }
 
   if (collection === "establishments") {

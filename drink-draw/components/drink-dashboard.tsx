@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Minus, Plus, Scale, Star } from "lucide-react";
+import { Eraser, Minus, Plus, Scale, Star } from "lucide-react";
 import { useCatalog } from "@/components/catalog-provider";
 import { OfferCard } from "@/components/offer-card";
 import { Button } from "@/components/ui/button";
 import { compareOffers, formatPrice, formatSavings, offerTotals, ratePerLiter } from "@/lib/compare";
 import { relatedDrinks } from "@/lib/related-drinks";
-import { emptyOffer, initialSession, offerLetters, readSession, selectOfferDrink, sessionKey, type DrinkSession, type Offer } from "@/lib/drink-session";
+import { drinksAtEstablishment, emptyOffer, initialSession, offerLetters, readSession, selectOfferDrink, selectOfferEstablishment, sessionKey, type Offer } from "@/lib/drink-session";
 
 export function DrinkDashboard() {
   const [session, setSession] = useState(initialSession);
@@ -30,9 +30,10 @@ export function DrinkDashboard() {
     }
 
     function validateEstablishment(offer: Offer) {
-      return establishments.some(({ id }) => id === offer.establishmentId)
-        ? offer
-        : { ...offer, establishmentId: "" };
+      if (!offer.establishmentId) return offer;
+      const exists = establishments.some(({ id }) => id === offer.establishmentId);
+      const matches = !offer.drinkId || drinksAtEstablishment(drinks, offer.establishmentId).some(({ id }) => id === offer.drinkId);
+      return exists && matches ? offer : { ...offer, establishmentId: "" };
     }
 
     setSession(restored.map(validateEstablishment));
@@ -49,9 +50,14 @@ export function DrinkDashboard() {
   }, [ready, session]);
 
   useEffect(() => {
-    if (!revealNewest.current || !offerStrip.current) return;
+    const strip = offerStrip.current;
+    if (!revealNewest.current || !strip) return;
     revealNewest.current = false;
-    offerStrip.current.scrollLeft = offerStrip.current.scrollWidth;
+    if (getComputedStyle(strip).display === "grid") {
+      strip.children[session.length - 1]?.scrollIntoView({ block: "nearest" });
+    } else {
+      strip.scrollLeft = strip.scrollWidth;
+    }
   }, [session.length]);
 
   const totals = session.map(offerTotals);
@@ -68,6 +74,16 @@ export function DrinkDashboard() {
     setSession((current) => current.map((item, slot) => slot === index ? offer : item));
   }
 
+  function clearOffer(index: number) {
+    if (index < 2) setSuggestedId(undefined);
+    changeOffer(index, emptyOffer());
+  }
+
+  function clearAllOffers() {
+    setSuggestedId(undefined);
+    setSession((current) => current.map(() => emptyOffer()));
+  }
+
   function addOffer() {
     revealNewest.current = true;
     setSession((current) => current.length < offerLetters.length ? [...current, emptyOffer()] : current);
@@ -77,10 +93,17 @@ export function DrinkDashboard() {
     setSession((current) => index < initialSession.length ? current : current.filter((_, slot) => slot !== index));
   }
 
+  function selectEstablishment(index: number, id: string) {
+    if (index < 2) setSuggestedId(undefined);
+    changeOffer(index, selectOfferEstablishment(session[index], id, drinks));
+  }
+
   function selectDrink(index: number, id: string) {
     if (id === session[index].drinkId) return;
-    const drink = drinks.find((item) => item.id === id);
-    const suggested = index === 0 && drink ? relatedDrinks(drink, drinks)[0] : undefined;
+    const drink = drinksAtEstablishment(drinks, session[index].establishmentId).find((item) => item.id === id);
+    const suggested = index === 0 && drink
+      ? relatedDrinks(drink, drinksAtEstablishment(drinks, session[1].establishmentId))[0]
+      : undefined;
     if (index < 2) setSuggestedId(suggested?.id);
     setSession((current) => current.map((offer, slot) => {
       if (slot === index) return selectOfferDrink(offer, id, drinks);
@@ -125,6 +148,9 @@ export function DrinkDashboard() {
             >
               {session.length > 2 ? "Inverter A e B" : "Inverter ofertas"}
             </Button>
+            <Button type="button" variant="outline" disabled={!ready} onClick={clearAllOffers}>
+              <Eraser aria-hidden="true" /> Limpar todas
+            </Button>
             <span className="offer-count" aria-live="polite">{session.length} de {offerLetters.length}</span>
           </div>
         </div>
@@ -141,8 +167,10 @@ export function DrinkDashboard() {
               winner={winner === index}
               disabled={!ready}
               suggested={index === 1 && offer.drinkId === suggestedId}
+              onSelectEstablishment={(id) => selectEstablishment(index, id)}
               onSelectDrink={(id) => selectDrink(index, id)}
               onChange={(next) => changeOffer(index, next)}
+              onClear={() => clearOffer(index)}
               onRemove={index < initialSession.length ? undefined : () => removeOffer(index)}
             />
           ))}

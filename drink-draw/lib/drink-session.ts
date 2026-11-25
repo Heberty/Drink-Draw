@@ -18,12 +18,12 @@ export const offerLetters = ["A", "B", "C", "D"] as const;
 export type DrinkSession = Offer[];
 
 export const initialSession: DrinkSession = [
-  { drinkId: "sicilia", price: "4,49", volume: "350", quantity: "1", establishmentId: "sample-market", example: true, corrections: {} },
-  { drinkId: "sicilia-1l", price: "9,99", volume: "1000", quantity: "1", establishmentId: "sample-wholesale", example: true, corrections: {} },
+  { drinkId: "sicilia", price: "4,49", volume: "350", quantity: "1", establishmentId: "", example: true, corrections: {} },
+  { drinkId: "sicilia-1l", price: "9,99", volume: "1000", quantity: "1", establishmentId: "", example: true, corrections: {} },
 ];
 
 export function emptyOffer(): Offer {
-  return { drinkId: "", volume: "", quantity: "1", price: "", establishmentId: "", example: false, corrections: {} };
+  return { drinkId: "", volume: "", quantity: "", price: "", establishmentId: "", example: false, corrections: {} };
 }
 
 export function offerDrink(offer: Offer, drinks: Drink[] = catalog) {
@@ -31,11 +31,33 @@ export function offerDrink(offer: Offer, drinks: Drink[] = catalog) {
   return original ? { ...original, ...offer.corrections[original.id] } : undefined;
 }
 
+export function drinksAtEstablishment(drinks: Drink[], establishmentId: string) {
+  return establishmentId ? drinks.filter((drink) => drink.referenceEstablishmentId === establishmentId) : drinks;
+}
+
+export function selectOfferEstablishment(offer: Offer, establishmentId: string, drinks: Drink[]): Offer {
+  if (offer.drinkId && !drinksAtEstablishment(drinks, establishmentId).some(({ id }) => id === offer.drinkId)) {
+    return { ...emptyOffer(), establishmentId, corrections: offer.corrections };
+  }
+  return { ...offer, establishmentId };
+}
+
 export function selectOfferDrink(offer: Offer, id: string, drinks: Drink[]): Offer {
   if (id === offer.drinkId) return offer;
+  if (!id) return { ...emptyOffer(), establishmentId: offer.establishmentId, corrections: offer.corrections };
 
-  const next = { ...offer, drinkId: id, price: "", quantity: "1", example: false };
-  return { ...next, volume: String(offerDrink(next, drinks)?.volume ?? "") };
+  const drink = drinksAtEstablishment(drinks, offer.establishmentId).find((item) => item.id === id);
+  if (!drink) return offer;
+
+  return {
+    ...offer,
+    drinkId: id,
+    volume: String(offer.corrections[id]?.volume ?? drink.volume),
+    quantity: "1",
+    price: drink.referenceEstablishmentId && drink.referencePriceCents !== undefined ? priceFromCents(drink.referencePriceCents) : "",
+    establishmentId: drink.referenceEstablishmentId ?? offer.establishmentId,
+    example: false,
+  };
 }
 
 export function detailDraft(drink: Drink, offer: Offer) {
@@ -63,7 +85,7 @@ export function resetOffer(offer: Offer, drink: Drink): Offer {
     ...withDrinkCorrection(offer, drink, null),
     quantity: "1",
     price: drink.referencePriceCents === undefined ? "" : priceFromCents(drink.referencePriceCents),
-    establishmentId: "",
+    establishmentId: drink.referenceEstablishmentId ?? "",
     example: false,
   };
 }

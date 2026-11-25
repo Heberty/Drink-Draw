@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { catalogChoiceName, CatalogValidationError, type CatalogChoice } from "@/lib/catalog";
 import { parsePrice, parseVolume, priceFromCents } from "@/lib/compare";
 import { parseDraft, toDraft, type Drink, type DrinkDraft } from "@/lib/drinks";
-import { blankEstablishment, establishmentTypes, normalizeEstablishment, states, type Establishment, type EstablishmentDraft } from "@/lib/establishments";
+import { blankEstablishment, establishmentLabel, establishmentTypes, normalizeEstablishment, states, type Establishment, type EstablishmentDraft } from "@/lib/establishments";
 
 function createId() {
   return crypto.randomUUID?.() ?? crypto.getRandomValues(new Uint32Array(4)).join("-");
@@ -71,11 +71,12 @@ function RecordForm<T>({ fields, prepare, image, includeImage = true, onSave, on
 const blankDrink: DrinkDraft = { brand: "", type: "", volume: "", packaging: "Lata", description: "" };
 
 export function DrinkAdminForm({ record, onSave, onCancel }: FormProps<Drink>) {
-  const { brands, types } = useCatalog();
+  const { brands, types, establishments } = useCatalog();
   const [name, setName] = useState(record?.name ?? "");
   const [referencePrice, setReferencePrice] = useState(
     record?.referencePriceCents === undefined ? "" : priceFromCents(record.referencePriceCents),
   );
+  const [referenceEstablishmentId, setReferenceEstablishmentId] = useState(record?.referenceEstablishmentId ?? "");
   const [draft, setDraft] = useState(() => record ? {
     ...toDraft(record),
     brand: catalogChoiceName(brands, record.brand),
@@ -93,11 +94,15 @@ export function DrinkAdminForm({ record, onSave, onCancel }: FormProps<Drink>) {
     if (!name.trim() || !data || parseVolume(draft.volume) === null) {
       return { error: "Preencha nome, marca, tipo, descrição e um volume inteiro maior que zero." };
     }
+    const referencePriceCents = parsePrice(referencePrice) ?? undefined;
+    if (referenceEstablishmentId && referencePriceCents === undefined) {
+      return { error: "Informe o preço de referência do estabelecimento selecionado." };
+    }
 
     return {
       record: {
         ...data, id: record?.id ?? createId(), name: name.trim(), palette: record?.palette ?? "lemon",
-        referencePriceCents: parsePrice(referencePrice) ?? undefined, image,
+        referencePriceCents, referenceEstablishmentId: referenceEstablishmentId || undefined, image,
       },
     };
   }
@@ -116,6 +121,15 @@ export function DrinkAdminForm({ record, onSave, onCancel }: FormProps<Drink>) {
         <div className="field">
           <label htmlFor="admin-reference-price">Preço de referência por unidade (opcional)</label>
           <CurrencyInput id="admin-reference-price" value={referencePrice} onValueChange={setReferencePrice} />
+        </div>
+        <div className="field">
+          <label htmlFor="admin-reference-establishment">Estabelecimento do preço de referência (opcional)</label>
+          <NativeSelect id="admin-reference-establishment" value={referenceEstablishmentId} onChange={(event) => setReferenceEstablishmentId(event.target.value)}>
+            <option value="">Selecione</option>
+            {establishments.map((establishment) => (
+              <option key={establishment.id} value={establishment.id}>{establishmentLabel(establishment)}</option>
+            ))}
+          </NativeSelect>
         </div>
       </>
     )} />

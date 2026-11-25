@@ -121,12 +121,19 @@ def save_record(db, seed, collection, record, importing, image):
         kind = matching_choice(db, "types", record["type"])
         if not brand or not kind:
             raise ValidationError("Selecione uma marca e um tipo cadastrados.")
+        establishment_id = record.get("referenceEstablishmentId")
+        if establishment_id and not get_record(db, "establishments", establishment_id):
+            raise ValidationError("Selecione um estabelecimento cadastrado.")
         record.update(brand=brand, type=kind)
     store(db, collection, record, image)
     return True
 
 
 def delete_record(db, collection, identifier):
+    if collection == "establishments" and any(
+        drink.get("referenceEstablishmentId") == identifier for drink in raw_records(db, "drinks")
+    ):
+        raise ValidationError("Este estabelecimento está em uso. Atualize as bebidas vinculadas antes de excluir.")
     if collection in ("brands", "types"):
         option = get_record(db, collection, identifier)
         if option:

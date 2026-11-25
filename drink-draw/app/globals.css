@@ -247,6 +247,8 @@ summary.offer-details-control::-webkit-details-marker { display: none; }
 @media (max-width: 460px) {
   .brand { gap: 5px; font-size: 1rem; }
   .brand img { width: 34px; }
+  .offers-heading { flex-wrap: wrap; }
+  .offers-heading [data-slot="button"] { padding-inline: 10px; }
   .comparison-result { grid-template-columns: auto minmax(0, 1fr); gap: 8px 11px; padding: 13px; }
   .result-icon { width: 37px; height: 37px; }
   .result-savings { grid-column: 2; min-width: 0; flex-direction: row; align-items: baseline; justify-content: flex-start; gap: 6px; padding-left: 0; border-left: 0; }
@@ -425,6 +427,7 @@ summary.offer-details-control::-webkit-details-marker { display: none; }
 
 @container offer (max-width: 340px) {
   .offer-numbers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .offer-footer-actions > [data-slot="button"] { gap: 4px; padding-inline: 8px; font-size: .8rem; }
   .offer-visual { grid-template-columns: minmax(74px, 34%) minmax(0, 1fr); gap: 8px; }
   .offer-visual-copy strong { font-size: clamp(1.28rem, 7cqi, 1.8rem); }
   .offer-header h2 { white-space: nowrap; }
@@ -469,3 +472,72 @@ summary.offer-details-control::-webkit-details-marker { display: none; }
 .offers-strip-many .drink-select-editor [data-slot="button"] { width: 28px; height: 28px; }
 .offers-strip-many .offer-header-actions { min-width: 0; gap: 4px; }
 .offers-strip-many .winner-badge { min-width: 0; padding-inline: 6px; overflow-wrap: anywhere; }
+
+@media (max-width: 586px) {
+  .offers-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    overflow: visible;
+  }
+  .offer-rail {
+    position: fixed;
+    top: max(10dvh, env(safe-area-inset-top));
+    right: max(4px, env(safe-area-inset-right));
+    z-index: 5;
+    padding-top: 0;
+  }
+  .offer-card { padding: clamp(6px, 2vw, 10px); border-radius: 14px; }
+  .offer-winner { position: relative; overflow: visible; }
+  .offer-header { flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+  .offer-header h2 { gap: 4px; font-size: .87rem; }
+  .offer-letter { width: 22px; height: 22px; font-size: .75rem; }
+  .offer-winner .offer-header-actions { padding-inline-end: 14px; }
+  .offer-winner .winner-badge {
+    position: absolute;
+    inset-block-start: -5px;
+    inset-inline-end: -5px;
+    z-index: 1;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid var(--winner-border);
+  }
+  .winner-badge-text { @apply sr-only; }
+
+  .offer-visual {
+    grid-template-columns: minmax(34px, 30%) minmax(0, 1fr);
+    gap: 4px;
+  }
+  .offer-visual, .offer-empty-visual { min-height: 104px; }
+  .offer-empty-visual { padding: 8px; font-size: .8rem; }
+  .offer-visual-copy { padding: 6px 5px 6px 0; }
+  .offer-visual-copy strong { font-size: clamp(.96rem, 7cqi, 1.18rem); }
+  .offer-visual-copy > span:first-child { font-size: .62rem; }
+  .offer-visual .package-tag { margin-top: 0; padding: 2px 4px; font-size: .66rem; }
+  .offer-visual .package-scene { min-height: 0; }
+  .offer-visual .package-scene::after { top: calc(50% + 33px); }
+  .offer-visual .package-object { width: 33px; height: 56px; }
+  .offer-visual .package-bottle, .offer-visual .package-long-neck { width: 26px; height: 66px; }
+  .offer-visual .package-label span { font-size: .42rem; }
+  .offer-uploaded-image { height: 88px; padding: 3px; }
+
+  .offer-numbers { grid-template-columns: minmax(0, 1fr); }
+  .offer-fields .field { grid-template-columns: minmax(0, 1fr); }
+  .offer-fields .offer-select-field { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .offer-selection-label { grid-column: 1; grid-row: 1; min-height: 28px; align-items: center; }
+  .offer-selection-label > span { display: none; }
+  .drink-select { display: contents; }
+  .drink-select > [data-slot="native-select-wrapper"] { grid-column: 1 / -1; grid-row: 2; }
+  .drink-select-editor { grid-column: 2; grid-row: 1; }
+  .drink-select-editor [data-slot="button"] { width: 28px; height: 28px; }
+  .offer-fields label { font-size: .8rem; }
+  .offer-fields input { padding-inline: 8px; }
+  .offer-fields select { padding-inline: 8px 25px; text-overflow: ellipsis; }
+  .offer-fields [data-slot="native-select-wrapper"] > svg { right: 6px; }
+
+  .offer-footer-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  .offer-footer-actions > [data-slot="button"] { min-width: 0; padding-inline: 0; }
+  .offer-footer-actions > [data-slot="button"] > span { display: none; }
+}

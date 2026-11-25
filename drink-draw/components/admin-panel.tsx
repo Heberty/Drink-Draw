@@ -9,6 +9,8 @@ import { ChoiceAdminForm, DrinkAdminForm, EstablishmentAdminForm } from "@/compo
 import { useCatalog } from "@/components/catalog-provider";
 import { ImportLegacyCatalog } from "@/components/import-legacy-catalog";
 import { Button } from "@/components/ui/button";
+import { formatPrice } from "@/lib/compare";
+import { establishmentLabel } from "@/lib/establishments";
 import type { PanelRole, PanelUser } from "@/lib/panel-users";
 
 const sections = {
@@ -59,7 +61,14 @@ export function AdminPanel({ section, role, users, actorId }: {
           records={drinks}
           {...collectionProps}
           icon={<CupSoda aria-hidden="true" />}
-          summary={(drink) => `${drink.brand} · ${drink.type} · ${drink.volume} mL · ${drink.packaging}`}
+          summary={(drink) => {
+            const establishment = establishments.find(({ id }) => id === drink.referenceEstablishmentId);
+            return [
+              drink.brand, drink.type, `${drink.volume} mL`, drink.packaging,
+              drink.referencePriceCents === undefined ? undefined : formatPrice(drink.referencePriceCents / 100),
+              establishment && establishmentLabel(establishment),
+            ].filter(Boolean).join(" · ");
+          }}
           onRemove={(id) => remove("drinks", id)}
           renderForm={({ onSaved, ...props }) => <DrinkAdminForm {...props} onSave={async (record) => {
             await save("drinks", record);
