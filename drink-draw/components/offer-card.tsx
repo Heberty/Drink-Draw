@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { ChevronDown, Eraser, Info, Pencil, RotateCcw, Star, X } from "lucide-react";
+import { ChevronDown, Eraser, Info, Minus, Pencil, Plus, RotateCcw, Star, X } from "lucide-react";
 import { CatalogImage } from "@/components/catalog-image";
 import { DrinkFields } from "@/components/drink-fields";
 import { PackagePlaceholder } from "@/components/package-placeholder";
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } 
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
-import { formatPrice, formatVolume, offerTotals, ratePerLiter } from "@/lib/compare";
+import { formatCurrencyInput, formatPrice, formatVolume, offerTotals, ratePerLiter } from "@/lib/compare";
 import { drinksAtEstablishment, offerDrink, resetOffer, withDrinkCorrection, type Offer, type offerLetters } from "@/lib/drink-session";
 import { parseDraft, toDraft, type Drink, type DrinkData, type DrinkDraft } from "@/lib/drinks";
 import { establishmentLabel, type Establishment } from "@/lib/establishments";
@@ -92,17 +92,24 @@ export function OfferCard({ letter, offer, drinks, establishments, winner, disab
   const prefix = `offer-${letter}`;
   const drink = offerDrink(offer, drinks);
   const original = drinks.find(({ id }) => id === offer.drinkId);
-  const { cents, volume: totalVolume, unitVolume: volume, quantity } = offerTotals(offer);
+  const { cents, volume: totalVolume, unitPriceCents, unitVolume: volume, quantity } = offerTotals(offer);
   const rate = ratePerLiter(cents, totalVolume);
-  const invalidPrice = offer.price.trim() !== "" && cents === null;
+  const invalidPrice = offer.price.trim() !== "" && unitPriceCents === null;
+  const invalidTotalPrice = unitPriceCents !== null && quantity !== null && cents === null;
   const invalidVolume = offer.volume !== "" && volume === null;
   const invalidQuantity = offer.quantity !== "" && quantity === null;
   const invalidTotalVolume = volume !== null && quantity !== null && totalVolume === null;
   const establishment = establishments.find(({ id }) => id === offer.establishmentId);
   const availableDrinks = drinksAtEstablishment(drinks, establishment?.id ?? "");
-  const referenceEstablishment = establishments.find(({ id }) => id === drink?.referenceEstablishmentId);
   const moreLabel = <><Info aria-hidden="true" /><span>Saiba mais</span></>;
   const detailsLabel = <><ChevronDown aria-hidden="true" /> Ficha da bebida</>;
+
+  function adjustQuantity(increment: number) {
+    const next = (quantity ?? 0) + increment;
+    if (next >= 1 && Number.isSafeInteger(next)) {
+      onChange({ ...offer, quantity: String(next) });
+    }
+  }
 
   return (
     <Card className={`offer-card${winner ? " offer-winner" : ""}`}>
@@ -165,19 +172,34 @@ export function OfferCard({ letter, offer, drinks, establishments, winner, disab
           </div>
           <fieldset className="field-grid offer-numbers" disabled={!drink}>
             <div className="field">
-              <label htmlFor={`${prefix}-price`}>Preço total (R$)</label>
-              <CurrencyInput
-                id={`${prefix}-price`}
-                aria-invalid={invalidPrice || undefined}
-                aria-describedby={invalidPrice ? `${prefix}-price-error` : undefined}
-                value={offer.price}
-                onValueChange={(price) => onChange({ ...offer, price, example: false })}
-              />
-              {invalidPrice && <span id={`${prefix}-price-error`} className="form-feedback">Use um valor como 4,49.</span>}
-              {drink?.referencePriceCents !== undefined && <small className="reference-price">
-                Referência por unidade {formatPrice(drink.referencePriceCents / 100)}
-                {referenceEstablishment && ` · ${establishmentLabel(referenceEstablishment)}`}
-              </small>}
+              <label htmlFor={`${prefix}-quantity`}>Quantidade</label>
+              <div className="offer-quantity-stepper">
+                <Button type="button" variant="outline" size="icon"
+                  aria-label={`Diminuir quantidade da oferta ${letter}`} disabled={quantity === null || quantity <= 1}
+                  onClick={() => adjustQuantity(-1)}>
+                  <Minus aria-hidden="true" />
+                </Button>
+                <Input
+                  id={`${prefix}-quantity`}
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={Number.MAX_SAFE_INTEGER}
+                  step={1}
+                  aria-invalid={invalidQuantity || invalidTotalVolume || undefined}
+                  aria-describedby={invalidQuantity || invalidTotalVolume ? `${prefix}-quantity-error` : undefined}
+                  value={offer.quantity}
+                  onChange={(event) => onChange({ ...offer, quantity: event.target.value })}
+                />
+                <Button type="button" variant="outline" size="icon"
+                  aria-label={`Aumentar quantidade da oferta ${letter}`} disabled={quantity === Number.MAX_SAFE_INTEGER}
+                  onClick={() => adjustQuantity(1)}>
+                  <Plus aria-hidden="true" />
+                </Button>
+              </div>
+              {(invalidQuantity || invalidTotalVolume) && <span id={`${prefix}-quantity-error`} className="form-feedback">
+                {invalidTotalVolume ? "O volume total excede o valor permitido." : "Digite um inteiro maior que zero."}
+              </span>}
             </div>
             <div className="field">
               <label htmlFor={`${prefix}-volume`}>Vl por unidade (mL)</label>
@@ -193,19 +215,40 @@ export function OfferCard({ letter, offer, drinks, establishments, winner, disab
               {invalidVolume && <span id={`${prefix}-volume-error`} className="form-feedback">Digite um inteiro maior que zero.</span>}
             </div>
             <div className="field">
-              <label htmlFor={`${prefix}-quantity`}>Quantidade</label>
-              <Input
-                id={`${prefix}-quantity`}
-                inputMode="numeric"
-                maxLength={16}
-                aria-invalid={invalidQuantity || invalidTotalVolume || undefined}
-                aria-describedby={invalidQuantity || invalidTotalVolume ? `${prefix}-quantity-error` : undefined}
-                value={offer.quantity}
-                onChange={(event) => onChange({ ...offer, quantity: event.target.value })}
+              <label htmlFor={`${prefix}-price`}>Preço unitário</label>
+              <CurrencyInput
+                id={`${prefix}-price`}
+                aria-invalid={invalidPrice || undefined}
+                aria-describedby={invalidPrice ? `${prefix}-price-error` : undefined}
+                value={offer.price}
+                onValueChange={(price) => onChange({ ...offer, price, example: false })}
               />
-              {(invalidQuantity || invalidTotalVolume) && <span id={`${prefix}-quantity-error`} className="form-feedback">
-                {invalidTotalVolume ? "O volume total excede o valor permitido." : "Digite um inteiro maior que zero."}
+              {invalidPrice && <span id={`${prefix}-price-error`} className="form-feedback">Use um valor como 4,49.</span>}
+            </div>
+            <div className="field">
+              <label htmlFor={`${prefix}-total-price`}>Preço total (R$)</label>
+              <Input
+                id={`${prefix}-total-price`}
+                className="offer-total-price"
+                value={cents === null ? "" : formatCurrencyInput(cents)}
+                placeholder="—"
+                readOnly
+                aria-invalid={invalidTotalPrice || undefined}
+                aria-describedby={invalidTotalPrice ? `${prefix}-total-price-error` : undefined}
+              />
+              {invalidTotalPrice && <span id={`${prefix}-total-price-error`} className="form-feedback">
+                O preço total excede o valor permitido.
               </span>}
+            </div>
+            <div className="offer-quantity-shortcuts" role="group" aria-label={`Atalhos de quantidade da oferta ${letter}`}>
+              {[6, 12, 24].map((increment) => (
+                <Button key={increment} type="button" variant="outline"
+                  aria-label={`Adicionar ${increment} unidades à oferta ${letter}`}
+                  disabled={(quantity ?? 0) > Number.MAX_SAFE_INTEGER - increment}
+                  onClick={() => adjustQuantity(increment)}>
+                  +{increment}
+                </Button>
+              ))}
             </div>
           </fieldset>
         </fieldset>

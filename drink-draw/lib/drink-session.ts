@@ -1,7 +1,9 @@
 import { catalog, isDrinkData, toDraft, type Drink, type DrinkData } from "@/lib/drinks";
-import { priceFromCents } from "@/lib/compare";
+import { parsePrice, parseVolume, priceFromCents } from "@/lib/compare";
 
-export const sessionKey = "drink-draw:session:v2";
+export const sessionKey = "drink-draw:session:v4";
+const convertedPriceSessionKey = "drink-draw:session:v3";
+const previousOffersSessionKey = "drink-draw:session:v2";
 const previousSessionKey = "drink-draw:session:v1";
 
 export type Offer = {
@@ -123,18 +125,40 @@ function readOffer(value: unknown, fallback: Offer, drinks: Drink[]): Offer {
   return drink ? offer : { ...emptyOffer(), corrections, establishmentId: offer.establishmentId };
 }
 
+function readOfferList(raw: string | null): unknown[] | undefined {
+  try {
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed.slice(0, offerLetters.length) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function restoreConvertedPrice(offer: Offer, original: Offer): Offer {
+  const cents = parsePrice(original.price);
+  const count = parseVolume(original.quantity);
+  if (cents === null || count === null || count === 1) return offer;
+
+  // Restore the original price only when the saved offer still matches the conversion.
+  const converted = { ...original, price: priceFromCents(Math.round(cents / count)) };
+  return JSON.stringify(converted) === JSON.stringify(offer) ? original : offer;
+}
+
 export function readSession(storage: Pick<Storage, "getItem">, drinks: Drink[] = catalog): DrinkSession {
   const fallback: DrinkSession = [startingOffer(initialSession[0], drinks), startingOffer(initialSession[1], drinks)];
   try {
-    const raw = storage.getItem(sessionKey);
-    if (raw) {
-      const parsed: unknown = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        const offers = parsed.slice(0, offerLetters.length);
-        return Array.from({ length: Math.max(fallback.length, offers.length) }, (_, index) =>
-          readOffer(offers[index], fallback[index] ?? emptyOffer(), drinks),
-        );
-      }
+    const current = readOfferList(storage.getItem(sessionKey));
+    const converted = current ? undefined : readOfferList(storage.getItem(convertedPriceSessionKey));
+    const previousOffers = current ? undefined : readOfferList(storage.getItem(previousOffersSessionKey));
+    const offers = current ?? converted ?? previousOffers;
+    if (offers) {
+      return Array.from({ length: Math.max(fallback.length, offers.length) }, (_, index) => {
+        const defaultOffer = fallback[index] ?? emptyOffer();
+        const offer = readOffer(offers[index], defaultOffer, drinks);
+        return converted && previousOffers?.[index]
+          ? restoreConvertedPrice(offer, readOffer(previousOffers[index], defaultOffer, drinks))
+          : offer;
+      });
     }
 
     const previous = storage.getItem(previousSessionKey);

@@ -117,7 +117,7 @@ export function DrinkDashboard() {
         <div className="page-intro">
           <span className="overline"><Scale aria-hidden="true" /> Comparador de preços</span>
           <h1>Qual bebida vale mais<span>?</span></h1>
-          <p>Informe a quantidade, o volume por unidade e o preço total de cada oferta para comparar o custo por litro.</p>
+          <p>Informe a quantidade, o volume e o preço por unidade de cada oferta para comparar o custo por litro.</p>
         </div>
 
         <div className={`comparison-result${hasWinner ? " comparison-has-winner" : ""}`} role="status">
@@ -125,7 +125,7 @@ export function DrinkDashboard() {
           <div className="result-copy">
             <p>{hasWinner ? `Oferta ${offerLetters[winner]} compensa mais` : winner === "tie" ? "Empate no menor preço por litro" : "Comparação de ofertas"}</p>
             <span>
-              {comparison ? `${rates.join(" · ")}.` : "Preencha o preço total, o volume e a quantidade em pelo menos duas ofertas."}
+              {comparison ? `${rates.join(" · ")}.` : "Preencha a quantidade, o volume e o preço por unidade em pelo menos duas ofertas."}
               {hasExample && <span className="result-example"> Valores ilustrativos.</span>}
             </span>
           </div>

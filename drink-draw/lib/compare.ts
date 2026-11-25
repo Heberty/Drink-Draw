@@ -30,11 +30,14 @@ export function formatSavings(value: number) {
 }
 
 export function offerTotals(offer: { price: string; volume: string; quantity: string }) {
+  const unitPriceCents = parsePrice(offer.price);
   const unitVolume = parseVolume(offer.volume);
   const quantity = parseVolume(offer.quantity);
-  const total = unitVolume === null || quantity === null ? null : unitVolume * quantity;
-  const volume = total !== null && Number.isSafeInteger(total) ? total : null;
-  return { cents: parsePrice(offer.price), volume, unitVolume, quantity };
+  const totalCents = unitPriceCents === null || quantity === null ? null : unitPriceCents * quantity;
+  const totalVolume = unitVolume === null || quantity === null ? null : unitVolume * quantity;
+  const cents = Number.isSafeInteger(totalCents) ? totalCents : null;
+  const volume = Number.isSafeInteger(totalVolume) ? totalVolume : null;
+  return { cents, volume, unitPriceCents, unitVolume, quantity };
 }
 
 export function formatVolume(value: number) {
