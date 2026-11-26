@@ -249,8 +249,7 @@ export function DrinkDashboard() {
           {canSaveSession ? "As ofertas ficam salvas nesta aba durante a sessão." : "O navegador mantém as ofertas enquanto esta página estiver aberta."}
         </p>
       </main>
-
-      <footer className="site-footer frame"><span>Drink Draw</span><span>Comparador de bebidas</span></footer>
     </>
+
   );
 }

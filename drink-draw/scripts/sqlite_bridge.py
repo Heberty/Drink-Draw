@@ -13,12 +13,19 @@ class ValidationError(Exception):
     pass
 
 
+choice_references = {
+    "brands": ("drinks", "brand"),
+    "types": ("drinks", "type"),
+    "establishmentTypes": ("establishments", "type"),
+}
+
+
 def label(value):
     return unicodedata.normalize("NFC", value.strip()).lower()
 
 
 def setup(db, seed):
-    if db.execute("PRAGMA user_version").fetchone()[0] == 2:
+    if db.execute("PRAGMA user_version").fetchone()[0] == 3:
         return
     with db:
         db.execute("BEGIN IMMEDIATE")
@@ -40,7 +47,17 @@ def setup(db, seed):
                 name TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('admin', 'user')),
                 password_hash TEXT NOT NULL, session_version INTEGER NOT NULL DEFAULT 1
             )""")
-            db.execute("PRAGMA user_version = 2")
+        if version < 3:
+            kinds = {item["id"]: item for item in seed["establishmentTypes"]}
+            for establishment in raw_records(db, "establishments"):
+                name = establishment["type"]
+                identifier = label(name)
+                kinds.setdefault(identifier, {"id": identifier, "name": name})
+            db.executemany(
+                "INSERT OR IGNORE INTO catalog_records (collection, id, data) VALUES ('establishmentTypes', ?, ?)",
+                ((kind["id"], json.dumps(kind, ensure_ascii=False)) for kind in kinds.values()),
+            )
+            db.execute("PRAGMA user_version = 3")
 
 
 def decode(row):
@@ -91,7 +108,7 @@ def save_record(db, seed, collection, record, importing, image):
     identifier = record["id"]
     current = get_record(db, collection, identifier)
     original = next((row for row in seed[collection] if row["id"] == identifier), None)
-    is_choice = collection in ("brands", "types")
+    is_choice = collection in choice_references
     if importing and current and is_choice and original and label(original["name"]) != label(record["name"]):
         identifier = "import-" + hashlib.sha256(label(record["name"]).encode()).hexdigest()[:24]
         record["id"] = identifier
@@ -111,11 +128,16 @@ def save_record(db, seed, collection, record, importing, image):
                 return False
             raise ValidationError("Já existe um cadastro com esse nome.")
         if previous and previous["name"] != record["name"]:
-            field = "brand" if collection == "brands" else "type"
-            for drink in raw_records(db, "drinks"):
-                if label(drink[field]) == label(previous["name"]):
-                    store(db, "drinks", {**drink, field: record["name"]})
+            related, field = choice_references[collection]
+            for item in raw_records(db, related):
+                if label(item[field]) == label(previous["name"]):
+                    store(db, related, {**item, field: record["name"]})
 
+    if collection == "establishments":
+        kind = matching_choice(db, "establishmentTypes", record["type"])
+        if not kind:
+            raise ValidationError("Selecione um tipo de estabelecimento cadastrado.")
+        record["type"] = kind
     if collection == "drinks":
         brand = matching_choice(db, "brands", record["brand"])
         kind = matching_choice(db, "types", record["type"])
@@ -134,13 +156,14 @@ def delete_record(db, collection, identifier):
         drink.get("referenceEstablishmentId") == identifier for drink in raw_records(db, "drinks")
     ):
         raise ValidationError("Este estabelecimento está em uso. Atualize as bebidas vinculadas antes de excluir.")
-    if collection in ("brands", "types"):
+    if collection in choice_references:
         option = get_record(db, collection, identifier)
         if option:
             name = label(json.loads(option["data"])["name"])
-            field = "brand" if collection == "brands" else "type"
-            if any(label(drink[field]) == name for drink in raw_records(db, "drinks")):
-                raise ValidationError("Este cadastro está em uso. Atualize as bebidas vinculadas antes de excluir.")
+            related, field = choice_references[collection]
+            if any(label(item[field]) == name for item in raw_records(db, related)):
+                records = "os estabelecimentos vinculados" if related == "establishments" else "as bebidas vinculadas"
+                raise ValidationError(f"Este cadastro está em uso. Atualize {records} antes de excluir.")
     db.execute("DELETE FROM catalog_records WHERE collection = ? AND id = ?", (collection, identifier))
 
 

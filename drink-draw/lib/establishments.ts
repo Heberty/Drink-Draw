@@ -1,5 +1,5 @@
-export const establishmentTypes = [
-  "Supermercado", "Conveniência", "Atacado", "Site ou aplicativo", "Outro",
+export const initialEstablishmentTypes = [
+  "Supermercado", "Conveniência", "Atacado", "Site ou aplicativo", "Bar", "Boate", "Pub", "Festa", "Outro",
 ] as const;
 
 export const states = [
@@ -9,7 +9,7 @@ export const states = [
 
 export type EstablishmentDraft = {
   name: string;
-  type: (typeof establishmentTypes)[number];
+  type: string;
   branch: string;
   address: string;
   city: string;
@@ -19,7 +19,8 @@ export type EstablishmentDraft = {
   notes: string;
 };
 
-export type Establishment = EstablishmentDraft & { id: string; image?: Blob | string };
+export type Coordinates = { latitude: number; longitude: number };
+export type Establishment = EstablishmentDraft & Partial<Coordinates> & { id: string; image?: Blob | string };
 export const establishmentKey = "drink-draw:establishments:v1";
 
 export const blankEstablishment: EstablishmentDraft = {
@@ -44,8 +45,8 @@ export function readEstablishments(storage: Pick<Storage, "getItem">) {
     return records.filter((record): record is Establishment => {
       if (!record || typeof record.id !== "string" || !record.id || seen.has(record.id)) return false;
       if (typeof record.name !== "string" || !record.name.trim()) return false;
-      if (!establishmentTypes.includes(record.type)) return false;
       if (!Object.keys(blankEstablishment).every((key) => typeof record[key] === "string")) return false;
+      if (!record.type.trim()) return false;
       seen.add(record.id);
       return true;
     });
@@ -56,6 +57,21 @@ export function readEstablishments(storage: Pick<Storage, "getItem">) {
 
 export function establishmentLabel({ name, branch, city, state }: Establishment) {
   return [name, branch, [city, state].filter(Boolean).join(" / ")].filter(Boolean).join(" · ");
+}
+
+export function validCoordinates(value: Partial<Coordinates>): value is Coordinates {
+  const { latitude, longitude } = value;
+  return typeof latitude === "number" && Number.isFinite(latitude) && Math.abs(latitude) <= 90 &&
+    typeof longitude === "number" && Number.isFinite(longitude) && Math.abs(longitude) <= 180;
+}
+
+export function distanceInKm(from: Coordinates, to: Coordinates) {
+  const radians = Math.PI / 180;
+  const latitude = (to.latitude - from.latitude) * radians;
+  const longitude = (to.longitude - from.longitude) * radians;
+  const chord = Math.sin(latitude / 2) ** 2 +
+    Math.cos(from.latitude * radians) * Math.cos(to.latitude * radians) * Math.sin(longitude / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(chord)));
 }
 
 export function normalizeEstablishment(draft: EstablishmentDraft): EstablishmentDraft | null {

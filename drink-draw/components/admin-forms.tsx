@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { catalogChoiceName, CatalogValidationError, type CatalogChoice } from "@/lib/catalog";
 import { parsePrice, parseVolume, priceFromCents } from "@/lib/compare";
 import { parseDraft, toDraft, type Drink, type DrinkDraft } from "@/lib/drinks";
-import { blankEstablishment, establishmentLabel, establishmentTypes, normalizeEstablishment, states, type Establishment, type EstablishmentDraft } from "@/lib/establishments";
+import { blankEstablishment, establishmentLabel, normalizeEstablishment, states, validCoordinates, type Establishment, type EstablishmentDraft } from "@/lib/establishments";
 
 function createId() {
   return crypto.randomUUID?.() ?? crypto.getRandomValues(new Uint32Array(4)).join("-");
@@ -145,7 +145,13 @@ const establishmentFields = [
 ] as const;
 
 export function EstablishmentAdminForm({ record, onSave, onCancel }: FormProps<Establishment>) {
-  const [draft, setDraft] = useState<EstablishmentDraft>(record ?? blankEstablishment);
+  const { establishmentTypes } = useCatalog();
+  const [draft, setDraft] = useState<EstablishmentDraft>(() => {
+    const original = record ?? blankEstablishment;
+    return { ...original, type: catalogChoiceName(establishmentTypes, original.type) };
+  });
+  const [latitude, setLatitude] = useState(record?.latitude?.toString() ?? "");
+  const [longitude, setLongitude] = useState(record?.longitude?.toString() ?? "");
 
   function update<K extends keyof EstablishmentDraft>(field: K, value: EstablishmentDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -153,9 +159,18 @@ export function EstablishmentAdminForm({ record, onSave, onCancel }: FormProps<E
 
   function prepare(image?: Blob | string) {
     if (!draft.name.trim()) return { error: "Informe o nome do estabelecimento." };
+    if (!draft.type) return { error: "Selecione um tipo de estabelecimento." };
     const data = normalizeEstablishment(draft);
     if (!data) return { error: "Informe um site válido, como exemplo.com.br." };
-    return { record: { ...data, id: record?.id ?? createId(), image } };
+    const lat = latitude.trim();
+    const lng = longitude.trim();
+    const hasCoordinates = Boolean(lat || lng);
+    const coordinatePattern = /^[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)(?:e[+-]?\d+)?$/i;
+    const coordinates = { latitude: Number(lat.replace(",", ".")), longitude: Number(lng.replace(",", ".")) };
+    if (hasCoordinates && (!coordinatePattern.test(lat) || !coordinatePattern.test(lng) || !validCoordinates(coordinates))) {
+      return { error: "Informe latitude de -90 a 90 e longitude de -180 a 180 para exibir o local no mapa." };
+    }
+    return { record: { ...data, ...(hasCoordinates ? coordinates : {}), id: record?.id ?? createId(), image } };
   }
 
   return (
@@ -168,8 +183,9 @@ export function EstablishmentAdminForm({ record, onSave, onCancel }: FormProps<E
         <div className="field-grid">
           <div className="field">
             <label htmlFor="admin-est-type">Tipo</label>
-            <NativeSelect id="admin-est-type" value={draft.type} onChange={(event) => update("type", event.target.value as EstablishmentDraft["type"])}>
-              {establishmentTypes.map((type) => <option key={type}>{type}</option>)}
+            <NativeSelect id="admin-est-type" required value={draft.type} onChange={(event) => update("type", event.target.value)}>
+              <option value="">Selecione</option>
+              {establishmentTypes.map(({ id, name }) => <option key={id} value={name}>{name}</option>)}
             </NativeSelect>
           </div>
           <div className="field">
@@ -180,6 +196,17 @@ export function EstablishmentAdminForm({ record, onSave, onCancel }: FormProps<E
             </NativeSelect>
           </div>
         </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="admin-est-latitude">Latitude</label>
+            <Input id="admin-est-latitude" inputMode="decimal" maxLength={24} value={latitude} onChange={(event) => setLatitude(event.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor="admin-est-longitude">Longitude</label>
+            <Input id="admin-est-longitude" inputMode="decimal" maxLength={24} value={longitude} onChange={(event) => setLongitude(event.target.value)} />
+          </div>
+        </div>
+        <small className="text-muted-foreground">Preencha as duas coordenadas em graus decimais para mostrar o local no mapa.</small>
         <div className="manager-grid">
           {establishmentFields.map(([key, label, autoComplete]) => (
             <div className="field" key={key}>

@@ -25,7 +25,7 @@ function readRecords<T>(db: IDBDatabase, store: string): Promise<T[]> {
   });
 }
 
-export async function readLegacyCatalog(): Promise<CatalogData> {
+export async function readLegacyCatalog(): Promise<Omit<CatalogData, "establishmentTypes">> {
   const db = await openLegacyCatalog();
   if (!db) {
     const establishments = window.localStorage.getItem(establishmentKey) ? readEstablishments(window.localStorage) : [];

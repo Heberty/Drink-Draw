@@ -123,7 +123,6 @@ export function DrinkDetail({ drink, related, offerIndex, referenceEstablishment
           </aside>
         </div>
       </main>
-      <footer className="site-footer frame"><span>Drink Draw</span><span>Catálogo de bebidas</span></footer>
     </>
   );
 }

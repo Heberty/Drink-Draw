@@ -21,7 +21,8 @@ const sections = {
   users: { href: "/admin/usuarios", label: "Usuários", icon: Users },
 };
 
-type Section = keyof typeof sections;
+const establishmentTypesPath = "/admin/estabelecimentos/tipos";
+type Section = keyof typeof sections | "establishmentTypes";
 
 export function AdminPanel({ section, role, users, actorId }: {
   section: Section;
@@ -29,8 +30,12 @@ export function AdminPanel({ section, role, users, actorId }: {
   users?: PanelUser[];
   actorId?: string;
 }) {
-  const { drinks, establishments, brands, types, ready, canWrite, save, remove } = useCatalog();
+  const { drinks, establishments, establishmentTypes, brands, types, ready, canWrite, save, remove } = useCatalog();
   const collectionProps = { ready, canWrite };
+  const inEstablishments = section === "establishments" || section === "establishmentTypes";
+  const choice = section === "brands" ? { title: "Marcas", singular: "marca", createLabel: "Nova marca", records: brands }
+    : section === "types" ? { title: "Tipos de bebida", singular: "tipo de bebida", createLabel: "Novo tipo de bebida", records: types }
+    : { title: "Tipos de estabelecimento", singular: "tipo de estabelecimento", createLabel: "Novo tipo de estabelecimento", records: establishmentTypes };
 
   return (
     <main className="frame dashboard admin-page">
@@ -38,7 +43,7 @@ export function AdminPanel({ section, role, users, actorId }: {
         <div className="page-intro">
           <span className="overline"><Settings2 aria-hidden="true" /> Administração</span>
           <h1>Painel administrativo<span>.</span></h1>
-          <p>Gerencie os cadastros usados no comparador. Os cadastros e as imagens ficam salvos no banco de dados.</p>
+          <p>Gerencie os cadastros do comparador e do mapa.</p>
         </div>
         <form action={logoutAdmin} className="admin-signout">
           <Button type="submit" variant="outline"><LogOut aria-hidden="true" /> Sair</Button>
@@ -46,9 +51,15 @@ export function AdminPanel({ section, role, users, actorId }: {
       </div>
       <nav className="admin-nav" aria-label="Seções da administração">
         {Object.entries(sections).filter(([key]) => key !== "users" || role === "admin").map(([key, { href, label, icon: Icon }]) => (
-          <Link key={key} href={href} aria-current={section === key ? "page" : undefined}><Icon aria-hidden="true" /> {label}</Link>
+          <Link key={key} href={href} aria-current={section === key ? "page" : key === "establishments" && inEstablishments ? "location" : undefined}><Icon aria-hidden="true" /> {label}</Link>
         ))}
       </nav>
+      {inEstablishments && (
+        <nav className="admin-nav" aria-label="Cadastros de estabelecimentos">
+          <Link href={sections.establishments.href} aria-current={section === "establishments" ? "page" : undefined}>Locais</Link>
+          <Link href={establishmentTypesPath} aria-current={section === "establishmentTypes" ? "page" : undefined}>Tipos de estabelecimento</Link>
+        </nav>
+      )}
       {section === "users" && role === "admin" && users && actorId && <AdminUsers initialUsers={users} actorId={actorId} />}
       {section === "drinks" && <ImportLegacyCatalog />}
       {section === "drinks" && (
@@ -82,7 +93,7 @@ export function AdminPanel({ section, role, users, actorId }: {
           title="Estabelecimentos"
           singular="estabelecimento"
           createLabel="Novo estabelecimento"
-          description="Gerencie as lojas, sites e aplicativos disponíveis nas ofertas."
+          description="Gerencie os locais do mapa e os estabelecimentos disponíveis nas ofertas."
           records={establishments}
           {...collectionProps}
           icon={<Building2 aria-hidden="true" />}
@@ -94,14 +105,12 @@ export function AdminPanel({ section, role, users, actorId }: {
           }} />}
         />
       )}
-      {(section === "brands" || section === "types") && (
+      {(section === "brands" || section === "types" || section === "establishmentTypes") && (
         <AdminCollection
           key={section}
-          title={sections[section].label}
-          singular={section === "brands" ? "marca" : "tipo de bebida"}
-          createLabel={section === "brands" ? "Nova marca" : "Novo tipo de bebida"}
-          description={section === "brands" ? "Cadastre as marcas usadas no formulário de bebidas." : "Cadastre os tipos usados no formulário de bebidas."}
-          records={section === "brands" ? brands : types}
+          {...choice}
+          description={section === "establishmentTypes" ? "Cadastre as categorias usadas no mapa e no formulário de estabelecimentos."
+            : section === "brands" ? "Cadastre as marcas usadas no formulário de bebidas." : "Cadastre os tipos usados no formulário de bebidas."}
           {...collectionProps}
           icon={section === "brands" ? <Tag aria-hidden="true" /> : <Layers aria-hidden="true" />}
           summary={() => ""}

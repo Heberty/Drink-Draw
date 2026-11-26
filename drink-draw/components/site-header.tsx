@@ -3,12 +3,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LockKeyhole } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
 
 const links = [
   { href: "/", label: "Comparador" },
   { href: "/bebidas", label: "Catálogo" },
-  { href: "/admin", label: "Administração" },
+  { href: "/mapa", label: "Mapa" },
 ];
 
 export function SiteHeader() {
@@ -27,7 +29,15 @@ export function SiteHeader() {
             return <Link key={href} href={href} aria-current={pathname === href ? "page" : inSection ? "location" : undefined}>{label}</Link>;
           })}
         </nav>
-        <ThemeToggle />
+        <div className="header-actions">
+          <ThemeToggle />
+          <Button asChild variant="outline" size="icon" className="header-icon-button">
+            <Link href="/admin" aria-label="Administração" title="Administração"
+              aria-current={pathname === "/admin" ? "page" : pathname.startsWith("/admin/") ? "location" : undefined}>
+              <LockKeyhole aria-hidden="true" />
+            </Link>
+          </Button>
+        </div>
       </div>
     </header>
   );

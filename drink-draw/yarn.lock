@@ -524,6 +524,18 @@
   dependencies:
     tslib "^2.4.0"
 
+"@types/geojson@*":
+  version "7946.0.16"
+  resolved "https://registry.npmjs.org/@types/geojson/-/geojson-7946.0.16.tgz#8ebe53d69efada7044454e3305c19017d97ced2a"
+  integrity sha512-6C8nqWur3j98U6+lXDfTUWIfgvZU+EumvpHKcYjujKH7woYyLj2sUmff0tRhrqM7BohUw7Pz3ZB1jj2gW9Fvmg==
+
+"@types/leaflet@^1.9.23":
+  version "1.9.23"
+  resolved "https://registry.npmjs.org/@types/leaflet/-/leaflet-1.9.23.tgz#1ef4fa3eacc1c5b24b0c4f47981b0d9a5e7c9b4b"
+  integrity sha512-rpvCoR7fQ2I4tFGIDjuyRAXl25e9YiJ9eE7AdJY5aJF8tkgg4ph3fRb9zafM6ZB1YO5LYziZQwh/vW3IOat/+Q==
+  dependencies:
+    "@types/geojson" "*"
+
 "@types/node@^22.0.0":
   version "22.20.5"
   resolved "https://registry.yarnpkg.com/@types/node/-/node-22.20.5.tgz#afa7bde6da81b8b83ea4e2f020487e9b148c11fd"
@@ -614,6 +626,11 @@ jiti@^2.7.0:
   version "2.7.0"
   resolved "https://registry.yarnpkg.com/jiti/-/jiti-2.7.0.tgz#974228f2f4ca2bc21885a1797b45fea68e950c64"
   integrity sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==
+
+leaflet@1.9.4:
+  version "1.9.4"
+  resolved "https://registry.npmjs.org/leaflet/-/leaflet-1.9.4.tgz#23fae724e282fa25745aff82ca4d394748db7d8d"
+  integrity sha512-nxS1ynzJOmOlHp+iL3FyWqK89GtNL8U8rvlMOsQdTTssxZwCXh8N2NB3GDQOL+YR3XnWyZAxwQixURb+FA74PA==
 
 lightningcss-android-arm64@1.33.0:
   version "1.33.0"

@@ -1,6 +1,6 @@
 import { CatalogValidationError, type CatalogData } from "@/lib/catalog";
 import { isDrinkData, type Drink } from "@/lib/drinks";
-import { blankEstablishment, establishmentTypes, normalizeEstablishment, states, type EstablishmentDraft } from "@/lib/establishments";
+import { blankEstablishment, normalizeEstablishment, states, validCoordinates, type EstablishmentDraft } from "@/lib/establishments";
 
 export function validRecordId(id: unknown): id is string {
   return typeof id === "string" && id.length > 0 && id.length <= 160 && !/[\u0000-\u001f/\\]/.test(id);
@@ -35,12 +35,17 @@ export function readCatalogRecord(collection: keyof CatalogData, json: FormDataE
 
   if (collection === "establishments") {
     const fieldsValid = Object.keys(blankEstablishment).every((key) => typeof value[key] === "string" && value[key].length <= 500);
-    if (!fieldsValid || !establishmentTypes.includes(value.type) || (value.state && !states.includes(value.state))) {
+    if (!fieldsValid || !value.type.trim() || value.type.trim().length > 80 || (value.state && !states.includes(value.state))) {
       throw new CatalogValidationError("Confira os dados do estabelecimento.");
     }
     const record = normalizeEstablishment({ ...(value as EstablishmentDraft), name });
     if (!record) throw new CatalogValidationError("Informe um site válido para o estabelecimento.");
-    return { ...record, id };
+    const coordinates = { latitude: value.latitude, longitude: value.longitude };
+    if (value.latitude !== undefined || value.longitude !== undefined) {
+      if (!validCoordinates(coordinates)) throw new CatalogValidationError("Informe latitude de -90 a 90 e longitude de -180 a 180.");
+      return { ...record, type: record.type.trim(), ...coordinates, id };
+    }
+    return { ...record, type: record.type.trim(), id };
   }
 
   if (name.length > 80) throw new CatalogValidationError("Use até 80 caracteres no nome.");

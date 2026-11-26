@@ -1,5 +1,5 @@
 import { catalog, type Drink } from "@/lib/drinks";
-import { initialEstablishments, type Establishment } from "@/lib/establishments";
+import { initialEstablishments, initialEstablishmentTypes, type Establishment } from "@/lib/establishments";
 
 export type CatalogChoice = { id: string; name: string };
 export type ChoiceCollection = "brands" | "types";
@@ -7,6 +7,7 @@ export type ChoiceCollection = "brands" | "types";
 export type CatalogData = {
   drinks: Drink[];
   establishments: Establishment[];
+  establishmentTypes: CatalogChoice[];
   brands: CatalogChoice[];
   types: CatalogChoice[];
 };
@@ -15,7 +16,7 @@ export type CatalogRecord<K extends keyof CatalogData> = CatalogData[K][number];
 
 export class CatalogValidationError extends Error {}
 
-export const catalogCollections = ["drinks", "establishments", "brands", "types"] as const;
+export const catalogCollections = ["drinks", "establishments", "establishmentTypes", "brands", "types"] as const;
 
 export function isCatalogCollection(value: unknown): value is keyof CatalogData {
   return catalogCollections.some((collection) => collection === value);
@@ -46,6 +47,7 @@ export function choicesFromDrinks(drinks: Drink[], collection: ChoiceCollection)
 export const initialCatalog: CatalogData = {
   drinks: catalog,
   establishments: initialEstablishments,
+  establishmentTypes: initialEstablishmentTypes.map((name) => ({ id: labelKey(name), name })),
   brands: choicesFromDrinks(catalog, "brands"),
   types: choicesFromDrinks(catalog, "types"),
 };
