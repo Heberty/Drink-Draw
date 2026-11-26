@@ -2,7 +2,7 @@ import { useId } from "react";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { packages, type DrinkDraft } from "@/lib/drinks";
+import type { DrinkDraft } from "@/lib/drinks";
 
 type Props = {
   draft: DrinkDraft;
@@ -10,9 +10,10 @@ type Props = {
   includeVolume?: boolean;
   brandOptions?: string[];
   typeOptions?: string[];
+  packagingOptions: string[];
 };
 
-export function DrinkFields({ draft, onChange, includeVolume, brandOptions, typeOptions }: Props) {
+export function DrinkFields({ draft, onChange, includeVolume, brandOptions, typeOptions, packagingOptions }: Props) {
   const id = useId();
   const classification = [
     { field: "brand", title: "Marca", options: brandOptions },
@@ -21,8 +22,9 @@ export function DrinkFields({ draft, onChange, includeVolume, brandOptions, type
   const packagingField = (
     <div className="field">
       <label htmlFor={`${id}-packaging`}>Embalagem</label>
-      <NativeSelect id={`${id}-packaging`} value={draft.packaging} onChange={(event) => onChange("packaging", event.target.value as DrinkDraft["packaging"])}>
-        {packages.map((item) => <option key={item}>{item}</option>)}
+      <NativeSelect id={`${id}-packaging`} required value={draft.packaging} onChange={(event) => onChange("packaging", event.target.value)}>
+        <option value="">Selecione</option>
+        {packagingOptions.map((item) => <option key={item}>{item}</option>)}
       </NativeSelect>
     </div>
   );

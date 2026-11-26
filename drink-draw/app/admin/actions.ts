@@ -3,7 +3,7 @@
 import sharp from "sharp";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { CatalogValidationError, isCatalogCollection } from "@/lib/catalog";
+import { CatalogValidationError, isCatalogCollection, isCatalogImageCollection } from "@/lib/catalog";
 import { loadCatalog, removeCatalogRecord, saveCatalogRecord, type StoredImage } from "@/lib/catalog-db";
 import { imageMaxBytes, imageMaxDimension, imageSize, imageTypes } from "@/lib/catalog-image";
 import { readCatalogRecord, validRecordId } from "@/lib/catalog-input";
@@ -64,7 +64,7 @@ export async function saveAdminCatalogRecord(collection: string, form: FormData)
   try {
     const record = readCatalogRecord(collection, form.get("record"));
     const upload = form.get("image");
-    const supportsImage = collection === "drinks" || collection === "establishments";
+    const supportsImage = isCatalogImageCollection(collection);
     const image = supportsImage && upload instanceof File ? await readImage(upload)
       : supportsImage && form.get("removeImage") === "true" ? null : undefined;
     const importing = form.get("import") === "true";

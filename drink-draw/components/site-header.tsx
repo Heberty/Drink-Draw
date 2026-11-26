@@ -11,6 +11,7 @@ const links = [
   { href: "/", label: "Comparador" },
   { href: "/bebidas", label: "Catálogo" },
   { href: "/mapa", label: "Mapa" },
+  { href: "/eventos", label: "Eventos" },
 ];
 
 export function SiteHeader() {

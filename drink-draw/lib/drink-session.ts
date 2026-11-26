@@ -1,4 +1,4 @@
-import { catalog, isDrinkData, toDraft, type Drink, type DrinkData } from "@/lib/drinks";
+import { catalog, findDrinkById, isDrinkData, toDraft, type Drink, type DrinkData } from "@/lib/drinks";
 import { parsePrice, parseVolume, priceFromCents } from "@/lib/compare";
 
 export const sessionKey = "drink-draw:session:v4";
@@ -34,14 +34,26 @@ export function offerDrink(offer: Offer, drinks: Drink[] = catalog) {
 }
 
 export function drinksAtEstablishment(drinks: Drink[], establishmentId: string) {
-  return establishmentId ? drinks.filter((drink) => drink.referenceEstablishmentId === establishmentId) : drinks;
+  return establishmentId
+    ? drinks.filter((drink) => drink.establishmentPrices?.some((price) => price.establishmentId === establishmentId))
+    : drinks;
+}
+
+function priceForOffer(drink: Drink, establishmentId: string) {
+  const prices = drink.establishmentPrices ?? [];
+  return establishmentId ? prices.find((price) => price.establishmentId === establishmentId)
+    : prices.length === 1 ? prices[0] : undefined;
 }
 
 export function selectOfferEstablishment(offer: Offer, establishmentId: string, drinks: Drink[]): Offer {
-  if (offer.drinkId && !drinksAtEstablishment(drinks, establishmentId).some(({ id }) => id === offer.drinkId)) {
+  if (establishmentId === offer.establishmentId) return offer;
+  const drink = findDrinkById(drinks, offer.drinkId);
+  if (!drink) return { ...offer, establishmentId };
+  const price = establishmentId ? priceForOffer(drink, establishmentId) : undefined;
+  if (establishmentId && !price) {
     return { ...emptyOffer(), establishmentId, corrections: offer.corrections };
   }
-  return { ...offer, establishmentId };
+  return { ...offer, establishmentId, price: price ? priceFromCents(price.priceCents) : "", example: false };
 }
 
 export function selectOfferDrink(offer: Offer, id: string, drinks: Drink[]): Offer {
@@ -50,14 +62,15 @@ export function selectOfferDrink(offer: Offer, id: string, drinks: Drink[]): Off
 
   const drink = drinksAtEstablishment(drinks, offer.establishmentId).find((item) => item.id === id);
   if (!drink) return offer;
+  const price = priceForOffer(drink, offer.establishmentId);
 
   return {
     ...offer,
     drinkId: id,
     volume: String(offer.corrections[id]?.volume ?? drink.volume),
     quantity: "1",
-    price: drink.referenceEstablishmentId && drink.referencePriceCents !== undefined ? priceFromCents(drink.referencePriceCents) : "",
-    establishmentId: drink.referenceEstablishmentId ?? offer.establishmentId,
+    price: price ? priceFromCents(price.priceCents) : "",
+    establishmentId: price?.establishmentId ?? offer.establishmentId,
     example: false,
   };
 }
@@ -83,11 +96,13 @@ export function withDrinkCorrection(offer: Offer, drink: Drink, correction: Drin
 }
 
 export function resetOffer(offer: Offer, drink: Drink): Offer {
+  const price = priceForOffer(drink, offer.establishmentId);
+  const cents = price?.priceCents ?? drink.referencePriceCents;
   return {
     ...withDrinkCorrection(offer, drink, null),
     quantity: "1",
-    price: drink.referencePriceCents === undefined ? "" : priceFromCents(drink.referencePriceCents),
-    establishmentId: drink.referenceEstablishmentId ?? "",
+    price: cents === undefined ? "" : priceFromCents(cents),
+    establishmentId: price?.establishmentId ?? "",
     example: false,
   };
 }
@@ -96,8 +111,9 @@ function readCorrections(value: unknown, drinks: Drink[]): Offer["corrections"] 
   const corrections: Offer["corrections"] = {};
   if (!value || typeof value !== "object") return corrections;
   const stored = value as Record<string, unknown>;
-  for (const { id } of drinks) {
-    if (isDrinkData(stored[id])) corrections[id] = stored[id];
+  for (const { id, mergedIds = [] } of drinks) {
+    const correction = [id, ...mergedIds].map((key) => stored[key]).find(isDrinkData);
+    if (correction) corrections[id] = correction;
   }
   return corrections;
 }
@@ -110,14 +126,14 @@ function startingOffer(offer: Offer, drinks: Drink[]): Offer {
 function readOffer(value: unknown, fallback: Offer, drinks: Drink[]): Offer {
   if (!value || typeof value !== "object") return fallback;
   const stored = value as Partial<Offer>;
-  const drinkId = typeof stored.drinkId === "string" ? stored.drinkId : fallback.drinkId;
+  const storedDrinkId = typeof stored.drinkId === "string" ? stored.drinkId : fallback.drinkId;
   const corrections = readCorrections(stored.corrections, drinks);
-  const drink = drinks.find(({ id }) => id === drinkId);
+  const drink = findDrinkById(drinks, storedDrinkId);
   const offer = {
-    drinkId,
+    drinkId: drink?.id ?? "",
     corrections,
     price: typeof stored.price === "string" ? stored.price : "",
-    volume: typeof stored.volume === "string" ? stored.volume : String((corrections[drinkId] ?? drink)?.volume ?? ""),
+    volume: typeof stored.volume === "string" ? stored.volume : String(drink ? (corrections[drink.id] ?? drink).volume : ""),
     quantity: typeof stored.quantity === "string" ? stored.quantity : "1",
     establishmentId: typeof stored.establishmentId === "string" ? stored.establishmentId : "",
     example: stored.example === true,

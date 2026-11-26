@@ -1,21 +1,26 @@
-export const packages = ["Lata", "Long neck", "Garrafa"] as const;
-
 export type DrinkData = {
   brand: string;
   description: string;
   type: string;
   volume: number;
-  packaging: (typeof packages)[number];
+  packaging: string;
 };
+
+export type EstablishmentPrice = { establishmentId: string; priceCents: number };
 
 export type Drink = DrinkData & {
   id: string;
   name: string;
   palette: string;
   referencePriceCents?: number;
-  referenceEstablishmentId?: string;
+  establishmentPrices?: EstablishmentPrice[];
+  mergedIds?: string[];
   image?: Blob | string;
 };
+
+export function findDrinkById(drinks: Drink[], id: string) {
+  return drinks.find((drink) => drink.id === id || drink.mergedIds?.includes(id));
+}
 
 export const catalog: [Drink, ...Drink[]] = [
   {
@@ -85,13 +90,14 @@ export function parseDraft(draft: DrinkDraft): DrinkData | null {
   const brand = draft.brand.trim();
   const description = draft.description.trim();
   const type = draft.type.trim();
+  const packaging = draft.packaging.trim();
   const volume = Number(draft.volume);
 
-  if (!brand || !description || !type || !Number.isSafeInteger(volume) || volume <= 0) {
+  if (!brand || !description || !type || !packaging || !Number.isSafeInteger(volume) || volume <= 0) {
     return null;
   }
 
-  return { brand, description, type, volume, packaging: draft.packaging };
+  return { brand, description, type, volume, packaging };
 }
 
 export function isDrinkData(value: unknown): value is DrinkData {
@@ -102,8 +108,7 @@ export function isDrinkData(value: unknown): value is DrinkData {
     typeof data.description === "string" &&
     typeof data.type === "string" &&
     typeof data.volume === "number" &&
-    !!data.packaging &&
-    packages.includes(data.packaging) &&
+    typeof data.packaging === "string" &&
     parseDraft(toDraft(data as DrinkData)) !== null
   );
 }

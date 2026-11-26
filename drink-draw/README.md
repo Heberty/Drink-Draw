@@ -30,7 +30,7 @@ Copie `.env.example` para `.env.local` e preencha `DRINK_DRAW_ADMIN_USER`, `DRIN
 
 Em **Usuários**, administradores podem cadastrar contas, redefinir senhas e alterar perfis. Usuários comuns têm acesso aos cadastros do catálogo.
 
-Em **Marcas** e **Tipos de bebida**, cadastre as opções que serão selecionadas no formulário de bebidas. As marcas e os tipos das bebidas existentes são incluídos automaticamente.
+Em **Bebidas → Marcas**, **Tipos de bebida** e **Embalagens**, cadastre as opções do formulário de bebidas. As opções usadas pelas bebidas existentes são incluídas automaticamente.
 
 Os valores usam máscara de reais. No cadastro da bebida, o preço de referência por unidade é opcional e aparece junto ao campo de preço da oferta.
 

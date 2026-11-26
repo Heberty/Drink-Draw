@@ -9,16 +9,16 @@ import { useCatalog } from "@/components/catalog-provider";
 import { PackagePlaceholder } from "@/components/package-placeholder";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { formatVolume, parseVolume } from "@/lib/compare";
+import { formatPrice, formatVolume, parsePrice, parseVolume } from "@/lib/compare";
 import { detailDraft, offerLetters, readSession, type Offer } from "@/lib/drink-session";
 import { toDraft, type Drink } from "@/lib/drinks";
 import { establishmentLabel, type Establishment } from "@/lib/establishments";
 
-export function DrinkDetail({ drink, related, offerIndex, referenceEstablishment }: {
+export function DrinkDetail({ drink, related, offerIndex, pricedEstablishments }: {
   drink: Drink;
   related: Drink[];
   offerIndex?: number;
-  referenceEstablishment?: Establishment;
+  pricedEstablishments: (Establishment & { priceCents: number })[];
 }) {
   const { drinks, establishments, ready } = useCatalog();
   const [offer, setOffer] = useState<Offer>();
@@ -35,7 +35,9 @@ export function DrinkDetail({ drink, related, offerIndex, referenceEstablishment
 
   const draft = offer ? detailDraft(drink, offer) : toDraft(drink);
   const offerEstablishment = establishments.find(({ id }) => id === offer?.establishmentId);
-  const establishment = offerEstablishment ?? referenceEstablishment;
+  const displayedEstablishments = offerEstablishment
+    ? [{ ...offerEstablishment, priceCents: parsePrice(offer?.price ?? "") ?? undefined }]
+    : pricedEstablishments;
   const volume = parseVolume(draft.volume);
   const volumeLabel = volume === null ? "—" : formatVolume(volume);
   const showPhoto = drink.id === "sicilia" && draft.brand === drink.brand &&
@@ -84,13 +86,18 @@ export function DrinkDetail({ drink, related, offerIndex, referenceEstablishment
                   <div><dt><GlassWater aria-hidden="true" /> Tipo</dt><dd>{draft.type}</dd></div>
                   <div><dt><Droplet aria-hidden="true" /> Volume</dt><dd>{volumeLabel}</dd></div>
                   <div><dt><Package aria-hidden="true" /> Embalagem</dt><dd>{draft.packaging}</dd></div>
-                  {establishment && (
+                  {displayedEstablishments.length > 0 && (
                     <div className="detail-establishment">
-                      <dt><Building2 aria-hidden="true" /> Estabelecimento</dt>
-                      <dd>
-                        {establishment.image && <CatalogImage image={establishment.image} className="detail-establishment-image" />}
-                        <span>{establishmentLabel(establishment)}</span>
-                      </dd>
+                      <dt><Building2 aria-hidden="true" /> {displayedEstablishments.length === 1 ? "Estabelecimento" : "Estabelecimentos"}</dt>
+                      {displayedEstablishments.map((establishment) => (
+                        <dd key={establishment.id}>
+                          {establishment.image && <CatalogImage image={establishment.image} className="detail-establishment-image" />}
+                          <span>
+                            {establishmentLabel(establishment)}
+                            {establishment.priceCents !== undefined && <small>{formatPrice(establishment.priceCents / 100)} por unidade</small>}
+                          </span>
+                        </dd>
+                      ))}
                     </div>
                   )}
                 </dl>

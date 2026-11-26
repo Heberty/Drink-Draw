@@ -16,6 +16,7 @@ class ValidationError(Exception):
 choice_references = {
     "brands": ("drinks", "brand"),
     "types": ("drinks", "type"),
+    "packagingTypes": ("drinks", "packaging"),
     "establishmentTypes": ("establishments", "type"),
 }
 
@@ -25,7 +26,7 @@ def label(value):
 
 
 def setup(db, seed):
-    if db.execute("PRAGMA user_version").fetchone()[0] == 3:
+    if db.execute("PRAGMA user_version").fetchone()[0] == 6:
         return
     with db:
         db.execute("BEGIN IMMEDIATE")
@@ -48,16 +49,17 @@ def setup(db, seed):
                 password_hash TEXT NOT NULL, session_version INTEGER NOT NULL DEFAULT 1
             )""")
         if version < 3:
-            kinds = {item["id"]: item for item in seed["establishmentTypes"]}
-            for establishment in raw_records(db, "establishments"):
-                name = establishment["type"]
-                identifier = label(name)
-                kinds.setdefault(identifier, {"id": identifier, "name": name})
+            seed_choices(db, seed, "establishmentTypes")
+        if version < 4:
+            migrate_drink_prices(db)
+        if version < 5:
             db.executemany(
-                "INSERT OR IGNORE INTO catalog_records (collection, id, data) VALUES ('establishmentTypes', ?, ?)",
-                ((kind["id"], json.dumps(kind, ensure_ascii=False)) for kind in kinds.values()),
+                "INSERT OR IGNORE INTO catalog_records (collection, id, data) VALUES ('events', ?, ?)",
+                ((event["id"], json.dumps(event, ensure_ascii=False)) for event in seed["events"]),
             )
-            db.execute("PRAGMA user_version = 3")
+        if version < 6:
+            seed_choices(db, seed, "packagingTypes")
+            db.execute("PRAGMA user_version = 6")
 
 
 def decode(row):
@@ -71,6 +73,19 @@ def decode(row):
 def raw_records(db, collection):
     rows = db.execute("SELECT data FROM catalog_records WHERE collection = ?", (collection,))
     return [json.loads(row["data"]) for row in rows]
+
+
+def seed_choices(db, seed, collection):
+    choices = {item["id"]: item for item in seed[collection]}
+    related, field = choice_references[collection]
+    for item in raw_records(db, related):
+        name = item[field]
+        identifier = label(name)
+        choices.setdefault(identifier, {"id": identifier, "name": name})
+    db.executemany(
+        "INSERT OR IGNORE INTO catalog_records (collection, id, data) VALUES (?, ?, ?)",
+        ((collection, choice["id"], json.dumps(choice, ensure_ascii=False)) for choice in choices.values()),
+    )
 
 
 def get_record(db, collection, identifier):
@@ -101,6 +116,38 @@ def store(db, collection, record, image="keep"):
         ON CONFLICT(collection, id) DO UPDATE SET data = excluded.data,
         image = excluded.image, image_type = excluded.image_type, image_version = excluded.image_version""",
                (collection, record["id"], data, blob, mime, version))
+
+
+def drink_identity(record):
+    return tuple(label(record[field]) for field in ("name", "brand", "type", "packaging")) + (record["volume"],)
+
+
+def migrate_drink_prices(db):
+    groups = {}
+    rows = db.execute("SELECT data FROM catalog_records WHERE collection = 'drinks' ORDER BY image IS NULL, rowid").fetchall()
+    for row in rows:
+        record = json.loads(row["data"])
+        establishment_id = record.pop("referenceEstablishmentId", None)
+        if establishment_id and type(record.get("referencePriceCents")) is int:
+            record["establishmentPrices"] = [{"establishmentId": establishment_id, "priceCents": record.pop("referencePriceCents")}]
+            store(db, "drinks", record)
+        groups.setdefault(drink_identity(record), []).append(record)
+
+    for canonical, *duplicates in groups.values():
+        if not duplicates or any(not item.get("establishmentPrices") or "referencePriceCents" in item
+                                 for item in (canonical, *duplicates)):
+            continue
+        prices = [price for item in (canonical, *duplicates) for price in item["establishmentPrices"]]
+        if len({price["establishmentId"] for price in prices}) != len(prices):
+            continue
+
+        canonical["establishmentPrices"] = prices
+        canonical["mergedIds"] = [item["id"] for item in duplicates]
+        store(db, "drinks", canonical)
+        for item in duplicates:
+            db.execute("UPDATE catalog_records SET collection = 'archivedDrinks' WHERE collection = 'drinks' AND id = ?",
+                       (item["id"],))
+            store(db, "archivedDrinks", {**item, "canonicalDrinkId": canonical["id"]})
 
 
 def save_record(db, seed, collection, record, importing, image):
@@ -143,17 +190,31 @@ def save_record(db, seed, collection, record, importing, image):
         kind = matching_choice(db, "types", record["type"])
         if not brand or not kind:
             raise ValidationError("Selecione uma marca e um tipo cadastrados.")
-        establishment_id = record.get("referenceEstablishmentId")
-        if establishment_id and not get_record(db, "establishments", establishment_id):
-            raise ValidationError("Selecione um estabelecimento cadastrado.")
-        record.update(brand=brand, type=kind)
+        packaging = matching_choice(db, "packagingTypes", record["packaging"])
+        if not packaging:
+            raise ValidationError("Selecione uma embalagem cadastrada.")
+        record.update(brand=brand, type=kind, packaging=packaging)
+        if get_record(db, "archivedDrinks", identifier):
+            if importing:
+                return False
+            raise ValidationError("Esta bebida foi incorporada a outro cadastro. Recarregue o catálogo.")
+        if not previous or drink_identity(previous) != drink_identity(record):
+            if any(item["id"] != identifier and drink_identity(item) == drink_identity(record)
+                   for item in raw_records(db, "drinks")):
+                raise ValidationError("Esta bebida já está cadastrada. Adicione o preço ao cadastro existente.")
+        if any(not get_record(db, "establishments", price["establishmentId"])
+               for price in record.get("establishmentPrices", [])):
+            raise ValidationError("Selecione um estabelecimento cadastrado para cada preço.")
+        if previous and previous.get("mergedIds"):
+            record["mergedIds"] = previous["mergedIds"]
     store(db, collection, record, image)
     return True
 
 
 def delete_record(db, collection, identifier):
     if collection == "establishments" and any(
-        drink.get("referenceEstablishmentId") == identifier for drink in raw_records(db, "drinks")
+        price["establishmentId"] == identifier for drink in raw_records(db, "drinks")
+        for price in drink.get("establishmentPrices", [])
     ):
         raise ValidationError("Este estabelecimento está em uso. Atualize as bebidas vinculadas antes de excluir.")
     if collection in choice_references:
@@ -203,15 +264,26 @@ def save_user(db, actor, user):
 def run(db, seed, command, args):
     if command == "catalog":
         catalog = {name: [] for name in seed}
-        for row in db.execute("SELECT collection, id, data, image_version FROM catalog_records ORDER BY id"):
+        for row in db.execute("SELECT collection, id, data, image_version FROM catalog_records WHERE collection <> 'archivedDrinks' ORDER BY id"):
             catalog[row["collection"]].append(decode(row))
         return catalog
     if command == "drink":
         row = get_record(db, "drinks", args["id"])
+        if not row:
+            previous = get_record(db, "archivedDrinks", args["id"])
+            if previous:
+                row = get_record(db, "drinks", json.loads(previous["data"])["canonicalDrinkId"])
+        return decode(row) if row else None
+    if command == "event":
+        row = get_record(db, "events", args["id"])
         return decode(row) if row else None
     if command == "image":
+        collection = args["collection"]
         row = db.execute("SELECT image, image_type FROM catalog_records WHERE collection = ? AND id = ?",
-                         (args["collection"], args["id"])).fetchone()
+                         (collection, args["id"])).fetchone()
+        if not row and collection == "drinks":
+            row = db.execute("SELECT image, image_type FROM catalog_records WHERE collection = 'archivedDrinks' AND id = ?",
+                             (args["id"],)).fetchone()
         return {"data": base64.b64encode(row["image"]).decode(), "type": row["image_type"]} if row and row["image"] else None
     if command == "has_users":
         return bool(db.execute("SELECT 1 FROM panel_users LIMIT 1").fetchone())

@@ -1,5 +1,6 @@
-import type { CatalogData, CatalogRecord } from "@/lib/catalog";
+import type { CatalogData, CatalogImageCollection, CatalogRecord } from "@/lib/catalog";
 import type { Drink } from "@/lib/drinks";
+import type { CatalogEvent } from "@/lib/events";
 import { sqlite } from "@/lib/sqlite";
 
 type Collection = keyof CatalogData;
@@ -13,7 +14,11 @@ export function findCatalogDrink(id: string) {
   return sqlite<Drink | null>("drink", { id }) ?? undefined;
 }
 
-export function readCatalogImage(collection: "drinks" | "establishments", id: string) {
+export function findCatalogEvent(id: string) {
+  return sqlite<CatalogEvent | null>("event", { id }) ?? undefined;
+}
+
+export function readCatalogImage(collection: CatalogImageCollection, id: string) {
   const image = sqlite<{ data: string; type: string } | null>("image", { collection, id });
   return image ? { bytes: Buffer.from(image.data, "base64"), type: image.type } : undefined;
 }

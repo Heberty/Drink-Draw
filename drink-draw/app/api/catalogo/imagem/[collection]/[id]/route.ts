@@ -1,11 +1,12 @@
 import { readCatalogImage } from "@/lib/catalog-db";
 import { validRecordId } from "@/lib/catalog-input";
+import { isCatalogImageCollection } from "@/lib/catalog";
 
 type Context = { params: Promise<{ collection: string; id: string }> };
 
 export async function GET(_request: Request, { params }: Context) {
   const { collection, id } = await params;
-  const image = (collection === "drinks" || collection === "establishments") && validRecordId(id)
+  const image = isCatalogImageCollection(collection) && validRecordId(id)
     ? readCatalogImage(collection, id)
     : undefined;
 

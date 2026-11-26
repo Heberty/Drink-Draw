@@ -5,6 +5,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import type { FormProps } from "@/components/admin-collection";
 import { useCatalog } from "@/components/catalog-provider";
 import { DrinkFields } from "@/components/drink-fields";
+import { DrinkPricesEditor, type PriceRow } from "@/components/drink-prices-editor";
 import { ImageField } from "@/components/image-field";
 import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/ui/currency-input";
@@ -13,15 +14,17 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { catalogChoiceName, CatalogValidationError, type CatalogChoice } from "@/lib/catalog";
 import { parsePrice, parseVolume, priceFromCents } from "@/lib/compare";
-import { parseDraft, toDraft, type Drink, type DrinkDraft } from "@/lib/drinks";
+import { parseDraft, toDraft, type Drink, type DrinkDraft, type EstablishmentPrice } from "@/lib/drinks";
 import { blankEstablishment, establishmentLabel, normalizeEstablishment, states, validCoordinates, type Establishment, type EstablishmentDraft } from "@/lib/establishments";
+import { validEventDate, type CatalogEvent } from "@/lib/events";
 
 function createId() {
   return crypto.randomUUID?.() ?? crypto.getRandomValues(new Uint32Array(4)).join("-");
 }
 
-function RecordForm<T>({ fields, prepare, image, includeImage = true, onSave, onCancel }: {
+function RecordForm<T>({ fields, sideFields, prepare, image, includeImage = true, onSave, onCancel }: {
   fields: ReactNode;
+  sideFields?: ReactNode;
   prepare: (image?: Blob | string) => { record: T } | { error: string };
   image?: Blob | string;
   includeImage?: boolean;
@@ -53,11 +56,21 @@ function RecordForm<T>({ fields, prepare, image, includeImage = true, onSave, on
     }
   }
 
+  const photoField = includeImage && <ImageField image={photo} onChange={setPhoto} onBusy={setUploading} />;
+
   return (
     <form onSubmit={submit} className="manager-form">
-      <fieldset className="admin-form-fields" disabled={saving}>
-        {fields}
-        {includeImage && <ImageField image={photo} onChange={setPhoto} onBusy={setUploading} />}
+      <fieldset className={sideFields ? "admin-drink-edit-grid" : "admin-form-fields"} disabled={saving}>
+        {sideFields ? (
+          <>
+            <section className="admin-form-fields admin-drink-edit-details" aria-labelledby="drink-data-title">
+              <h2 id="drink-data-title">Dados da bebida</h2>
+              {fields}
+              {photoField}
+            </section>
+            {sideFields}
+          </>
+        ) : <>{fields}{photoField}</>}
       </fieldset>
       {error && <p className="form-feedback" role="alert">{error}</p>}
       <div className="modal-actions">
@@ -71,19 +84,24 @@ function RecordForm<T>({ fields, prepare, image, includeImage = true, onSave, on
 const blankDrink: DrinkDraft = { brand: "", type: "", volume: "", packaging: "Lata", description: "" };
 
 export function DrinkAdminForm({ record, onSave, onCancel }: FormProps<Drink>) {
-  const { brands, types, establishments } = useCatalog();
+  const { brands, types, packagingTypes, establishments } = useCatalog();
   const [name, setName] = useState(record?.name ?? "");
   const [referencePrice, setReferencePrice] = useState(
     record?.referencePriceCents === undefined ? "" : priceFromCents(record.referencePriceCents),
   );
-  const [referenceEstablishmentId, setReferenceEstablishmentId] = useState(record?.referenceEstablishmentId ?? "");
+  const [priceRows, setPriceRows] = useState<PriceRow[]>(() => (record?.establishmentPrices ?? []).map((entry) => ({
+    establishmentId: entry.establishmentId,
+    price: priceFromCents(entry.priceCents),
+  })));
   const [draft, setDraft] = useState(() => record ? {
     ...toDraft(record),
     brand: catalogChoiceName(brands, record.brand),
     type: catalogChoiceName(types, record.type),
-  } : blankDrink);
+    packaging: catalogChoiceName(packagingTypes, record.packaging),
+  } : { ...blankDrink, packaging: catalogChoiceName(packagingTypes, blankDrink.packaging) });
   const brandOptions = brands.map(({ name }) => name).sort((a, b) => a.localeCompare(b, "pt-BR"));
   const typeOptions = types.map(({ name }) => name).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const packagingOptions = packagingTypes.map(({ name }) => name).sort((a, b) => a.localeCompare(b, "pt-BR"));
 
   function update<K extends keyof DrinkDraft>(field: K, value: DrinkDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -92,47 +110,50 @@ export function DrinkAdminForm({ record, onSave, onCancel }: FormProps<Drink>) {
   function prepare(image?: Blob | string) {
     const data = parseDraft(draft);
     if (!name.trim() || !data || parseVolume(draft.volume) === null) {
-      return { error: "Preencha nome, marca, tipo, descrição e um volume inteiro maior que zero." };
+      return { error: "Preencha nome, marca, tipo, embalagem, descrição e um volume inteiro maior que zero." };
     }
     const referencePriceCents = parsePrice(referencePrice) ?? undefined;
-    if (referenceEstablishmentId && referencePriceCents === undefined) {
-      return { error: "Informe o preço de referência do estabelecimento selecionado." };
+    const establishmentPrices: EstablishmentPrice[] = [];
+    for (const row of priceRows) {
+      const priceCents = parsePrice(row.price);
+      if (priceCents === null) {
+        const store = establishments.find(({ id }) => id === row.establishmentId);
+        return { error: store ? `Informe o preço unitário em ${establishmentLabel(store)}.` : "Informe o preço unitário em todas as linhas." };
+      }
+      establishmentPrices.push({ establishmentId: row.establishmentId, priceCents });
     }
 
     return {
       record: {
         ...data, id: record?.id ?? createId(), name: name.trim(), palette: record?.palette ?? "lemon",
-        referencePriceCents, referenceEstablishmentId: referenceEstablishmentId || undefined, image,
+        referencePriceCents, establishmentPrices, image,
       },
     };
   }
 
   return (
-    <RecordForm image={record?.image} prepare={prepare} onSave={onSave} onCancel={onCancel} fields={(
-      <>
-        <div className="field">
-          <label htmlFor="admin-drink-name">Nome da bebida</label>
-          <Input id="admin-drink-name" autoFocus required maxLength={100} value={name} onChange={(event) => setName(event.target.value)} />
-        </div>
-        {(!brands.length || !types.length) && <p className="form-feedback">
-          Cadastre uma <Link href="/admin/marcas" className="underline">marca</Link> e um <Link href="/admin/tipos" className="underline">tipo de bebida</Link> para continuar.
-        </p>}
-        <DrinkFields draft={draft} onChange={update} includeVolume brandOptions={brandOptions} typeOptions={typeOptions} />
-        <div className="field">
-          <label htmlFor="admin-reference-price">Preço de referência por unidade (opcional)</label>
-          <CurrencyInput id="admin-reference-price" value={referencePrice} onValueChange={setReferencePrice} />
-        </div>
-        <div className="field">
-          <label htmlFor="admin-reference-establishment">Estabelecimento do preço de referência (opcional)</label>
-          <NativeSelect id="admin-reference-establishment" value={referenceEstablishmentId} onChange={(event) => setReferenceEstablishmentId(event.target.value)}>
-            <option value="">Selecione</option>
-            {establishments.map((establishment) => (
-              <option key={establishment.id} value={establishment.id}>{establishmentLabel(establishment)}</option>
-            ))}
-          </NativeSelect>
-        </div>
-      </>
-    )} />
+    <RecordForm image={record?.image} prepare={prepare} onSave={onSave} onCancel={onCancel}
+      sideFields={<DrinkPricesEditor establishments={establishments} rows={priceRows} onChange={setPriceRows} />}
+      fields={(
+        <>
+          <div className="field">
+            <label htmlFor="admin-drink-name">Nome da bebida</label>
+            <Input id="admin-drink-name" required maxLength={100} value={name} onChange={(event) => setName(event.target.value)} />
+          </div>
+          {(!brands.length || !types.length || !packagingTypes.length) && <p className="form-feedback">
+            Cadastre uma <Link href="/admin/bebidas/marcas" className="underline">marca</Link>, um <Link href="/admin/bebidas/tipos" className="underline">tipo de bebida</Link> e uma <Link href="/admin/bebidas/embalagens" className="underline">embalagem</Link> para continuar.
+          </p>}
+          <DrinkFields draft={draft} onChange={update} includeVolume brandOptions={brandOptions} typeOptions={typeOptions}
+            packagingOptions={packagingOptions} />
+          {record?.referencePriceCents !== undefined && (
+            <div className="field">
+              <label htmlFor="admin-reference-price">Preço de referência sem estabelecimento</label>
+              <CurrencyInput id="admin-reference-price" value={referencePrice} onValueChange={setReferencePrice} />
+            </div>
+          )}
+        </>
+      )}
+    />
   );
 }
 
@@ -219,6 +240,56 @@ export function EstablishmentAdminForm({ record, onSave, onCancel }: FormProps<E
           <label htmlFor="admin-est-notes">Observações</label>
           <Textarea id="admin-est-notes" rows={2} maxLength={500} value={draft.notes} onChange={(event) => update("notes", event.target.value)} />
         </div>
+      </>
+    )} />
+  );
+}
+
+export function EventAdminForm({ record, onSave, onCancel }: FormProps<CatalogEvent>) {
+  const [draft, setDraft] = useState<Omit<CatalogEvent, "id" | "image">>(() => record ?? {
+    name: "", date: "", time: "", location: "", description: "", sample: false,
+  });
+
+  function update<K extends keyof typeof draft>(field: K, value: (typeof draft)[K]) {
+    setDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function prepare(image?: Blob | string) {
+    if (!draft.name.trim() || !draft.location.trim() || !validEventDate(draft.date)) {
+      return { error: "Informe o nome, a data e o local do evento." };
+    }
+    return { record: { ...draft, id: record?.id ?? createId(), image } };
+  }
+
+  return (
+    <RecordForm image={record?.image} prepare={prepare} onSave={onSave} onCancel={onCancel} fields={(
+      <>
+        <div className="field">
+          <label htmlFor="admin-event-name">Nome do evento</label>
+          <Input id="admin-event-name" required autoFocus maxLength={100} value={draft.name} onChange={(event) => update("name", event.target.value)} />
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="admin-event-date">Data</label>
+            <Input id="admin-event-date" type="date" required value={draft.date} onChange={(event) => update("date", event.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor="admin-event-time">Horário</label>
+            <Input id="admin-event-time" type="time" value={draft.time} onChange={(event) => update("time", event.target.value)} />
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="admin-event-location">Local</label>
+          <Input id="admin-event-location" required maxLength={160} value={draft.location} onChange={(event) => update("location", event.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="admin-event-description">Descrição</label>
+          <Textarea id="admin-event-description" maxLength={1000} rows={3} value={draft.description} onChange={(event) => update("description", event.target.value)} />
+        </div>
+        <label className="admin-event-sample">
+          <input type="checkbox" checked={draft.sample} onChange={(event) => update("sample", event.target.checked)} />
+          Evento fictício
+        </label>
       </>
     )} />
   );

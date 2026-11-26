@@ -20,7 +20,7 @@ export function ImportLegacyCatalog() {
 
     try {
       const legacy = await readLegacyCatalog();
-      for (const collection of ["brands", "types", "drinks", "establishments"] as const) {
+      for (const collection of ["brands", "types", "packagingTypes", "establishments", "drinks"] as const) {
         for (const record of legacy[collection]) {
           const result = await saveAdminCatalogRecord(collection, recordForm(record, true));
           if (result.error) failed++;

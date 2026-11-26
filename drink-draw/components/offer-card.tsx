@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { ChevronDown, Eraser, Info, Minus, Pencil, Plus, RotateCcw, Star, X } from "lucide-react";
 import { CatalogImage } from "@/components/catalog-image";
+import { useCatalog } from "@/components/catalog-provider";
 import { DrinkFields } from "@/components/drink-fields";
 import { PackagePlaceholder } from "@/components/package-placeholder";
 import { Button } from "@/components/ui/button";
@@ -18,9 +19,12 @@ import { parseDraft, toDraft, type Drink, type DrinkData, type DrinkDraft } from
 import { establishmentLabel, type Establishment } from "@/lib/establishments";
 
 function DrinkEditor({ offer, drink, original, onChange }: { offer: Offer; drink: Drink; original: Drink; onChange: (offer: Offer) => void }) {
+  const { packagingTypes } = useCatalog();
   const [draft, setDraft] = useState(() => toDraft(drink));
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
+  const packagingOptions = [...new Set([...packagingTypes.map(({ name }) => name), drink.packaging])]
+    .sort((a, b) => a.localeCompare(b, "pt-BR"));
 
   function update<K extends keyof DrinkDraft>(field: K, value: DrinkDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -36,7 +40,7 @@ function DrinkEditor({ offer, drink, original, onChange }: { offer: Offer; drink
     event.preventDefault();
     const data = parseDraft(draft);
     if (!data) {
-      setError("Preencha a marca, o tipo e a descrição.");
+      setError("Preencha a marca, o tipo, a embalagem e a descrição.");
       return;
     }
     apply(data);
@@ -61,7 +65,7 @@ function DrinkEditor({ offer, drink, original, onChange }: { offer: Offer; drink
           {drink.name}. As correções valem para esta oferta durante a sessão.
         </DialogDescription>
         <form onSubmit={save} className="manager-form">
-          <DrinkFields draft={draft} onChange={update} />
+          <DrinkFields draft={draft} onChange={update} packagingOptions={packagingOptions} />
           {error && <p className="form-feedback" role="status">{error}</p>}
           <div className="modal-actions edit-actions">
             <Button type="button" variant="ghost" onClick={() => apply(null)}><RotateCcw aria-hidden="true" /> Restaurar dados originais</Button>
@@ -120,7 +124,7 @@ export function OfferCard({ letter, offer, drinks, establishments, winner, disab
             {winner && (
               <span className="winner-badge">
                 <Star aria-hidden="true" className="winner-star" />
-                <span className="winner-badge-text">Melhor custo-benefício</span>
+                <span className="winner-badge-text">Custo-benefício</span>
               </span>
             )}
             {onRemove && <Button type="button" variant="ghost" size="icon" className="offer-remove" disabled={disabled}

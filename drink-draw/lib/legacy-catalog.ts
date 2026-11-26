@@ -25,11 +25,11 @@ function readRecords<T>(db: IDBDatabase, store: string): Promise<T[]> {
   });
 }
 
-export async function readLegacyCatalog(): Promise<Omit<CatalogData, "establishmentTypes">> {
+export async function readLegacyCatalog(): Promise<Omit<CatalogData, "establishmentTypes" | "events">> {
   const db = await openLegacyCatalog();
   if (!db) {
     const establishments = window.localStorage.getItem(establishmentKey) ? readEstablishments(window.localStorage) : [];
-    return { drinks: [], brands: [], types: [], establishments };
+    return { drinks: [], brands: [], types: [], packagingTypes: [], establishments };
   }
 
   try {
@@ -43,6 +43,7 @@ export async function readLegacyCatalog(): Promise<Omit<CatalogData, "establishm
       drinks, establishments,
       brands: db.objectStoreNames.contains("brands") ? brands : choicesFromDrinks(drinks, "brands"),
       types: db.objectStoreNames.contains("types") ? types : choicesFromDrinks(drinks, "types"),
+      packagingTypes: choicesFromDrinks(drinks, "packagingTypes"),
     };
   } finally {
     db.close();
