@@ -18,7 +18,7 @@ export default function TermsPage() {
         </section>
         <section>
           <h2>Informações do mapa</h2>
-          <p>O mapa exibe estabelecimentos cadastrados com coordenadas. Quando você escolhe usar sua localização e autoriza o acesso no navegador, os locais são ordenados pela distância em linha reta. Confirme o endereço e o horário de funcionamento com o estabelecimento antes de sair.</p>
+          <p>O mapa exibe estabelecimentos cadastrados com coordenadas. Ao abrir o mapa, o navegador pode pedir permissão para acessar sua localização. Os locais são ordenados pela distância em linha reta a partir da posição estimada pelo navegador ou do ponto que você marcar no mapa. Confirme o endereço e o horário de funcionamento com o estabelecimento antes de sair.</p>
         </section>
       </div>
     </main>

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LocateFixed, MapPin } from "lucide-react";
-import type { Map as LeafletMap, Marker } from "leaflet";
+import type { LeafletMouseEvent, Map as LeafletMap, Marker } from "leaflet";
 import { CatalogImage } from "@/components/catalog-image";
 import { useCatalog } from "@/components/catalog-provider";
 import { Button } from "@/components/ui/button";
@@ -10,14 +10,16 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { distanceInKm, establishmentLabel, validCoordinates, type Coordinates, type Establishment } from "@/lib/establishments";
 
 type Place = Establishment & Coordinates;
+type MapLocation = Coordinates & ({ source: "browser"; accuracy: number } | { source: "manual" });
 type MapEngine = { leaflet: typeof import("leaflet"); map: LeafletMap };
 const distanceFormat = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
 
-function MapCanvas({ places, nearest, location, focused }: {
+function MapCanvas({ places, nearby, location, focused, onPickLocation }: {
   places: Place[];
-  nearest?: Place;
-  location?: Coordinates;
+  nearby: Place[];
+  location?: MapLocation;
   focused?: { id: string };
+  onPickLocation?: (point: Coordinates) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const markers = useRef(new Map<string, Marker>());
@@ -47,8 +49,68 @@ function MapCanvas({ places, nearest, location, focused }: {
   useEffect(() => {
     if (!engine) return;
     const { leaflet, map } = engine;
+    const element = map.getContainer();
+    let zoomTimer: number | undefined;
+    let wheelDelta = 0;
+
+    function zoomWithControl(event: WheelEvent) {
+      if (!event.ctrlKey) return;
+      const delta = leaflet.DomEvent.getWheelDelta(event);
+      if (!delta) return;
+      event.preventDefault();
+      wheelDelta += delta;
+      if (zoomTimer !== undefined) return;
+
+      const point = map.mouseEventToContainerPoint(event);
+      zoomTimer = window.setTimeout(() => {
+        const zoom = map.getZoom();
+        const nextZoom = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), zoom + Math.sign(wheelDelta)));
+        if (nextZoom !== zoom) map.setZoomAround(point, nextZoom);
+        wheelDelta = 0;
+        zoomTimer = undefined;
+      }, 80);
+    }
+
+    element.addEventListener("wheel", zoomWithControl, { passive: false });
+    return () => {
+      element.removeEventListener("wheel", zoomWithControl);
+      window.clearTimeout(zoomTimer);
+    };
+  }, [engine]);
+
+  useEffect(() => {
+    if (!engine || !onPickLocation) return;
+    const { map } = engine;
+    const element = map.getContainer();
+    map.closePopup();
+
+    function pickPoint({ latlng }: LeafletMouseEvent) {
+      const { lat, lng } = latlng.wrap();
+      onPickLocation?.({ latitude: lat, longitude: lng });
+    }
+
+    function pickCenter(event: KeyboardEvent) {
+      if (event.key === "Enter" && event.target === element) {
+        event.preventDefault();
+        const { lat, lng } = map.getCenter().wrap();
+        onPickLocation?.({ latitude: lat, longitude: lng });
+      }
+    }
+
+    map.on("click", pickPoint);
+    element.addEventListener("keydown", pickCenter);
+    return () => {
+      map.off("click", pickPoint);
+      element.removeEventListener("keydown", pickCenter);
+    };
+  }, [engine, onPickLocation]);
+
+  useEffect(() => {
+    if (!engine) return;
+    const { leaflet, map } = engine;
     const layer = leaflet.layerGroup().addTo(map);
     const byId = new Map<string, Marker>();
+    const nearest = nearby[0];
 
     for (const place of places) {
       const face = document.createElement("span");
@@ -89,10 +151,17 @@ function MapCanvas({ places, nearest, location, focused }: {
 
     if (location) {
       const point = leaflet.latLng(location.latitude, location.longitude);
+      if (location.source === "browser" && Number.isFinite(location.accuracy) && location.accuracy > 0) {
+        leaflet.circle(point, {
+          radius: location.accuracy, color: "#2477d4", weight: 1, fillOpacity: 0.12, interactive: false,
+        }).addTo(layer);
+      }
       leaflet.circleMarker(point, { radius: 8, weight: 3, color: "#fff", fillColor: "#2477d4", fillOpacity: 1 })
-        .bindTooltip("Você está aqui").addTo(layer);
-      if (nearest) {
-        map.fitBounds(leaflet.latLngBounds([point, [nearest.latitude, nearest.longitude]]), { padding: [44, 44], maxZoom: 15 });
+        .bindTooltip(location.source === "manual" ? "Localização marcada por você" : "Localização estimada pelo navegador").addTo(layer);
+      if (nearby.length) {
+        const bounds = leaflet.latLngBounds([point]);
+        for (const { latitude, longitude } of nearby) bounds.extend([latitude, longitude]);
+        map.fitBounds(bounds, { padding: [44, 44], maxZoom: 15 });
       } else {
         map.setView(point, 14);
       }
@@ -105,7 +174,7 @@ function MapCanvas({ places, nearest, location, focused }: {
       layer.remove();
       markers.current = new Map();
     };
-  }, [engine, places, nearest, location]);
+  }, [engine, places, nearby, location]);
 
   useEffect(() => {
     const marker = focused && markers.current.get(focused.id);
@@ -117,7 +186,8 @@ function MapCanvas({ places, nearest, location, focused }: {
 
   return (
     <div className="map-panel">
-      <div ref={container} className="map-canvas" role="region" aria-label="Mapa dos estabelecimentos" />
+      <div ref={container} className={onPickLocation ? "map-canvas map-canvas-picking" : "map-canvas"}
+        role="region" aria-label="Mapa dos estabelecimentos" aria-describedby={onPickLocation ? "map-pick-hint" : "map-zoom-hint"} />
       {!engine && <p className="map-status" role="status">{unavailable ? "O mapa está indisponível." : "Carregando mapa…"}</p>}
     </div>
   );
@@ -126,9 +196,11 @@ function MapCanvas({ places, nearest, location, focused }: {
 export function EstablishmentMap() {
   const { establishments, establishmentTypes, ready } = useCatalog();
   const [typeId, setTypeId] = useState("");
-  const [location, setLocation] = useState<Coordinates>();
+  const [location, setLocation] = useState<MapLocation>();
   const [focused, setFocused] = useState<{ id: string }>();
-  const [locationStatus, setLocationStatus] = useState<"idle" | "pending" | "failed">("idle");
+  const [locationRequest, setLocationRequest] = useState<number | null>(0);
+  const [pickingLocation, setPickingLocation] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<"idle" | "pending" | "failed">("pending");
   const selectedType = establishmentTypes.find(({ id }) => id === typeId);
   const type = selectedType?.name;
   const places = useMemo(() => establishments.filter((record): record is Place =>
@@ -139,20 +211,35 @@ export function EstablishmentMap() {
     place,
     distance: location ? distanceInKm(location, place) : undefined,
   })).sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0) || a.place.name.localeCompare(b.place.name, "pt-BR")), [places, location]);
-  const nearest = location ? matches[0]?.place : undefined;
+  const nearby = useMemo(() => location ? matches.slice(0, 5).map(({ place }) => place) : [], [location, matches]);
+  const accuracy = location?.source === "browser" && Number.isFinite(location.accuracy) && location.accuracy > 0
+    ? location.accuracy : undefined;
 
-  function locate() {
+  useEffect(() => {
+    if (locationRequest === null) return;
     if (!navigator.geolocation) {
       setLocationStatus("failed");
       return;
     }
+    let active = true;
     setLocationStatus("pending");
     navigator.geolocation.getCurrentPosition(({ coords }) => {
+      if (!active) return;
       setFocused(undefined);
-      setLocation({ latitude: coords.latitude, longitude: coords.longitude });
+      setLocation({ latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy, source: "browser" });
       setLocationStatus("idle");
-    }, () => setLocationStatus("failed"), { timeout: 10000, maximumAge: 60000 });
-  }
+    }, () => {
+      if (active) setLocationStatus("failed");
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+    return () => { active = false; };
+  }, [locationRequest]);
+
+  const pickLocation = useCallback((point: Coordinates) => {
+    if (!validCoordinates(point)) return;
+    setFocused(undefined);
+    setLocation({ ...point, source: "manual" });
+    setPickingLocation(false);
+  }, []);
 
   return (
     <main className="frame dashboard">
@@ -168,15 +255,35 @@ export function EstablishmentMap() {
             {options.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}
           </NativeSelect>
         </div>
-        <Button type="button" variant="outline" onClick={locate} disabled={locationStatus === "pending"}>
-          <LocateFixed aria-hidden="true" /> {locationStatus === "pending" ? "Localizando…" : "Usar minha localização"}
+        <Button type="button" variant="outline" onClick={() => {
+          setPickingLocation(false);
+          setLocationRequest((current) => (current ?? 0) + 1);
+        }} disabled={locationStatus === "pending"}>
+          <LocateFixed aria-hidden="true" /> {locationStatus === "pending" ? "Localizando…"
+            : location?.source === "browser" ? "Atualizar minha localização" : "Usar minha localização"}
+        </Button>
+        <Button type="button" variant="outline" aria-pressed={pickingLocation} onClick={() => {
+          if (!pickingLocation) {
+            setLocationRequest(null);
+            setLocationStatus("idle");
+          }
+          setPickingLocation(!pickingLocation);
+        }}>
+          <MapPin aria-hidden="true" /> {pickingLocation ? "Cancelar seleção" : "Marcar no mapa"}
         </Button>
       </div>
       {locationStatus === "failed" && <p className="map-location-status" role="status">Não foi possível acessar sua localização. Confira a permissão do navegador.</p>}
+      {pickingLocation ? (
+        <p className="map-location-status" id="map-pick-hint" role="status">Clique ou toque no ponto onde você está. Pelo teclado, use as setas para mover o mapa e pressione Enter para marcar o centro.</p>
+      ) : location?.source === "manual" ? <p className="map-location-status" role="status">Distâncias calculadas a partir do ponto que você marcou.</p>
+        : accuracy !== undefined && <p className="map-location-status" role="status">
+          Margem estimada da localização de {accuracy >= 1000 ? `${distanceFormat.format(accuracy / 1000)} km` : `${Math.ceil(accuracy)} m`}.
+        </p>}
+      <p className="map-zoom-hint" id="map-zoom-hint">Segure <kbd>Ctrl</kbd> e role sobre o mapa para ajustar o zoom.</p>
       <div className="map-layout">
-        <MapCanvas places={places} nearest={nearest} location={location} focused={focused} />
+        <MapCanvas places={places} nearby={nearby} location={location} focused={focused} onPickLocation={pickingLocation ? pickLocation : undefined} />
         <aside className="map-results">
-          <h2>{nearest ? "Mais próximos" : "Estabelecimentos no mapa"}</h2>
+          <h2>{nearby.length ? "Mais próximos" : "Estabelecimentos no mapa"}</h2>
           {!ready ? <p role="status">Carregando estabelecimentos…</p> : matches.length === 0 ? (
             <p>{type ? "Nenhum local desse tipo tem coordenadas cadastradas." : "Nenhum estabelecimento tem coordenadas cadastradas."}</p>
           ) : (

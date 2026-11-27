@@ -590,10 +590,15 @@ summary.offer-details-control::-webkit-details-marker { display: none; }
 
 .map-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-bottom: 12px; }
 .map-toolbar > .field { width: min(100%, 260px); }
-.map-location-status { margin-bottom: 12px; color: var(--muted-foreground); font-size: .85rem; }
+.map-location-status, .map-zoom-hint { margin-bottom: 12px; color: var(--muted-foreground); font-size: .85rem; }
+@media (pointer: coarse) {
+  .map-zoom-hint { display: none; }
+}
 .map-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); align-items: start; gap: 14px; }
 .map-panel { position: relative; isolation: isolate; overflow: hidden; border: 1px solid var(--border); border-radius: 16px; }
 .map-canvas { height: clamp(300px, 62dvh, 620px); background: var(--muted); }
+.map-canvas.map-canvas-picking { cursor: crosshair; }
+.map-canvas.map-canvas-picking .leaflet-marker-icon { pointer-events: none; }
 .map-status { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; color: var(--muted-foreground); }
 .map-results { min-width: 0; padding: 14px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); }
 .map-results h2 { margin-bottom: 10px; font-size: 1rem; font-weight: 780; }
